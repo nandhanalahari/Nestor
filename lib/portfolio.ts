@@ -5,36 +5,47 @@ export const safeHaven = { ticker: "BND", name: "Total Bond ETF" };
 export const scenarios: Scenario[] = [
   {
     id: "market-drop",
-    title: "Market drops sharply",
+    title: "Market Crash",
     question: "What if stocks fall 20% in a month?",
     description:
-      "Stress test with the early 2020 selloff window. Stocks fall fast, bonds stay steady.",
+      "Stress test with the early 2020 COVID selloff. Stocks fell fast, bonds held steady.",
     marketStory:
-      "Investors are nervous, growth names are getting hit, and safer assets are catching the bid.",
+      "Investors panicked, growth names got hammered, and safer assets caught the bid. The S&P 500 dropped over 30% in weeks.",
     windowStart: "2020-01-01",
     windowEnd: "2020-06-01",
   },
   {
     id: "inflation-spike",
-    title: "Inflation spikes",
+    title: "Inflation Spike",
     question: "What if prices heat up like 2022?",
     description:
-      "Use the 2021-2022 inflation window. Rates rise, growth tech struggles, bonds need a shorter role.",
+      "Use the 2021-2022 inflation window. Rates rose, growth tech struggled, bonds needed a shorter role.",
     marketStory:
-      "Rates are rising, expensive growth stocks feel pressure, and bonds need a steadier role.",
+      "CPI hit 9.1%, the Fed raised rates aggressively, expensive growth stocks felt pressure, and bonds lost value too.",
     windowStart: "2021-06-01",
     windowEnd: "2022-12-31",
   },
   {
     id: "recession",
-    title: "Recession warning",
+    title: "Recession",
     question: "What if the economy slides into recession?",
     description:
-      "Use the 2008 financial crisis window. Cash flow matters more than hype.",
+      "Use the 2008 financial crisis window. Credit froze, banks failed, cash flow mattered more than hype.",
     marketStory:
-      "Consumers spend less, companies cut forecasts, and cash flow matters more than headlines.",
+      "The financial system nearly collapsed. Consumers cut spending, companies slashed forecasts, and safe havens were the only shelter.",
     windowStart: "2008-01-01",
     windowEnd: "2009-06-01",
+  },
+  {
+    id: "tech-boom",
+    title: "Tech Boom",
+    question: "What if tech stocks surge like 2023-2024?",
+    description:
+      "Use the AI-driven tech rally of 2023-2024. Growth and mega-cap tech led the market higher.",
+    marketStory:
+      "AI enthusiasm drove tech stocks to new highs. The Magnificent Seven dominated returns while other sectors lagged behind.",
+    windowStart: "2023-01-01",
+    windowEnd: "2024-06-01",
   },
 ];
 

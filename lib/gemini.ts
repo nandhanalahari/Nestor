@@ -25,23 +25,29 @@ export async function explainRebalancing(
   context: ExplanationContext,
 ): Promise<string> {
   const ai = getClient();
-  const prompt = `You are Nestor, a wise and friendly financial guide for a beginner.
+
+  const riskContrib = Object.entries(context.result.riskContributions || {})
+    .map(([t, pct]) => `${t}: ${pct}%`)
+    .join(", ");
+
+  const prompt = `You are Nestor, a wise and friendly financial guide for a beginner investor.
+
+The ML model ran Mean-Variance Optimization using real historical data from Alpha Vantage. It computed the covariance matrix (how assets move together) and found the minimum-volatility portfolio on the Efficient Frontier.
 
 User: ${context.ownerName}
 Goal: ${context.goalText ?? "Build a steady, calm investing habit."}
 Scenario: ${context.scenarioTitle}
-Story: ${context.scenarioStory}
+What happened historically: ${context.scenarioStory}
 
-Original allocation (% of portfolio): ${JSON.stringify(
-    context.result.originalAllocation,
-  )}
+Original allocation: ${JSON.stringify(context.result.originalAllocation)}
 Recommended allocation: ${JSON.stringify(context.result.newAllocation)}
-Expected risk reduction: ${context.result.expectedRiskReduction}
-Estimated annualized volatility: was ${context.result.originalVolPct.toFixed(
-    1,
-  )}%, now ${context.result.newVolPct.toFixed(1)}%
+Risk reduction: ${context.result.expectedRiskReduction}
+Annualized volatility: was ${context.result.originalVolPct.toFixed(1)}%, now ${context.result.newVolPct.toFixed(1)}%
+Sharpe ratio: was ${context.result.originalSharpe.toFixed(2)}, now ${context.result.newSharpe.toFixed(2)}
+Max drawdown: was ${context.result.maxDrawdownOriginal.toFixed(1)}%, now ${context.result.maxDrawdownOptimized.toFixed(1)}%
+Risk contributions by asset: ${riskContrib || "N/A"}
 
-Explain in 2 to 3 short sentences why this calm rebalance helps the user, mention any tax angle in plain English, and end with a single reassuring sentence. No jargon. No bullet points. No emojis.`;
+Explain in 3-4 short sentences why the optimizer suggested these changes. Mention which asset was the biggest "weak link" during this historical period and why shifting weight helps. Reference the reduced drawdown if it's meaningful. End with one reassuring sentence. No jargon, no bullet points, no emojis. Write as if talking to a friend who just started investing.`;
 
   const response = await ai.models.generateContent({
     model: MODEL,

@@ -18,7 +18,7 @@ export type Quote = {
   asOf: string;
 };
 
-export type ScenarioId = "market-drop" | "inflation-spike" | "recession";
+export type ScenarioId = "market-drop" | "inflation-spike" | "recession" | "tech-boom";
 
 export type Scenario = {
   id: ScenarioId;
@@ -32,6 +32,12 @@ export type Scenario = {
 
 export type Allocation = Record<string, number>;
 
+export type FrontierPoint = {
+  expectedReturn: number;
+  volatility: number;
+  sharpe: number;
+};
+
 export type RebalancingResult = {
   scenarioId: ScenarioId;
   windowStart: string;
@@ -43,6 +49,12 @@ export type RebalancingResult = {
   newScenarioReturnPct: number;
   originalVolPct: number;
   newVolPct: number;
+  originalSharpe: number;
+  newSharpe: number;
+  maxDrawdownOriginal: number;
+  maxDrawdownOptimized: number;
+  riskContributions: Record<string, number>;
+  efficientFrontier: FrontierPoint[];
   notes: {
     tax: string;
     fees: string;

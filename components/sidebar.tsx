@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -34,7 +34,7 @@ export function Sidebar() {
   const { user } = useAuth()
   const [mounted, setMounted] = useState(false)
 
-  useState(() => { setMounted(true) })
+  useEffect(() => { setMounted(true) }, [])
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "light" ? "dark" : "light")

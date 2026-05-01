@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runScenario } from "@/lib/scenario";
+import { explainRebalancing } from "@/lib/gemini";
 import type { Holding, ScenarioId } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
   }
 
   let holdings: Holding[] | undefined;
+  let userId: string | undefined;
 
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
@@ -45,6 +47,7 @@ export async function POST(req: Request) {
       } = await supabase.auth.getUser(token);
 
       if (user) {
+        userId = user.id;
         const { data: dbHoldings } = await supabase
           .from("holdings")
           .select("*")
@@ -72,13 +75,55 @@ export async function POST(req: Request) {
         }
       }
     } catch {
-      // Fall through to run without holdings
+      // Fall through
     }
   }
 
   try {
     const bundle = await runScenario(body.scenarioId, holdings);
-    return NextResponse.json(bundle);
+
+    // Generate Gemini explanation
+    let explanation = "";
+    try {
+      explanation = await explainRebalancing({
+        ownerName: "Investor",
+        scenarioTitle: bundle.scenario.title,
+        scenarioStory: bundle.scenario.marketStory,
+        result: bundle.result,
+      });
+    } catch {
+      explanation =
+        "The optimizer analyzed your portfolio using historical data and the covariance matrix to find a lower-risk allocation.";
+    }
+
+    // Save proposal to Supabase if authenticated
+    if (userId && token) {
+      try {
+        const supabase = getSupabase(token);
+        await supabase.from("rebalance_proposals").insert({
+          user_id: userId,
+          scenario_id: bundle.result.scenarioId,
+          scenario_title: bundle.scenario.title,
+          original_allocation: bundle.result.originalAllocation,
+          recommended_allocation: bundle.result.newAllocation,
+          risk_reduction: bundle.result.expectedRiskReduction,
+          original_vol: bundle.result.originalVolPct,
+          new_vol: bundle.result.newVolPct,
+          original_sharpe: bundle.result.originalSharpe,
+          new_sharpe: bundle.result.newSharpe,
+          max_drawdown_original: bundle.result.maxDrawdownOriginal,
+          max_drawdown_optimized: bundle.result.maxDrawdownOptimized,
+          risk_contributions: bundle.result.riskContributions,
+          efficient_frontier: bundle.result.efficientFrontier,
+          explanation,
+          source: bundle.source,
+        });
+      } catch {
+        // Non-critical: don't fail the response
+      }
+    }
+
+    return NextResponse.json({ ...bundle, explanation });
   } catch (error) {
     return NextResponse.json(
       {

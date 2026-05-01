@@ -4,9 +4,15 @@ import {
   monthlyReturns,
   sliceWindow,
 } from "./alphaVantage";
-import { optimizeMinVariance, portfolioStats } from "./optimization";
+import {
+  optimizeMinVariance,
+  portfolioStats,
+  computeEfficientFrontier,
+  portfolioMaxDrawdown,
+  buildCovarianceMatrix,
+} from "./optimization";
 import { scenarios, safeHaven, holdingsToWeights } from "./portfolio";
-import type { Holding, RebalancingResult, ScenarioId } from "./types";
+import type { Holding, RebalancingResult, ScenarioId, FrontierPoint } from "./types";
 
 const defaultHoldings: Holding[] = [
   { ticker: "SPY", name: "S&P 500 ETF", category: "ETF", amount: 10000, weight: 0.4 },
@@ -38,7 +44,7 @@ export async function runScenario(
 
   const warnings: string[] = [];
   if (!holdings || holdings.length === 0) {
-    warnings.push("No holdings found. Using sample portfolio (SPY/QQQ/BND/VXUS). Add your holdings in the dashboard to personalize.");
+    warnings.push("No holdings found. Using sample portfolio (SPY/QQQ/BND/VXUS). Add your holdings to personalize.");
   }
 
   let source: "live" | "fallback" = "live";
@@ -65,16 +71,13 @@ export async function runScenario(
   ) {
     source = "fallback";
     warnings.push(
-      "Some tickers had limited historical data for this window. Using a calibrated fallback.",
+      "Some tickers had limited historical data. Using calibrated fallback.",
     );
   }
 
   if (source === "fallback") return fallbackResult(scenario, effectiveHoldings, warnings);
 
-  const initialWeights = holdingsToWeights(effectiveHoldings);
-  for (const t of tickers) {
-    if (!(t in initialWeights)) initialWeights[t] = 0;
-  }
+  // ── Build return vectors ──
 
   const returns: Record<string, number[]> = {};
   for (const ticker of tickers) {
@@ -84,26 +87,60 @@ export async function runScenario(
     });
   }
 
-  const baseStats = portfolioStats(initialWeights, returns);
+  const initialWeights = holdingsToWeights(effectiveHoldings);
+  for (const t of tickers) {
+    if (!(t in initialWeights)) initialWeights[t] = 0;
+  }
+
+  // ── Covariance matrix & base stats ──
+
+  const cov = buildCovarianceMatrix(tickers, returns);
+  const baseStats = portfolioStats(initialWeights, returns, cov);
+
+  // ── Bounds based on asset class ──
 
   const bounds: Record<string, { min: number; max: number }> = {};
   for (const ticker of tickers) {
+    const h = effectiveHoldings.find((h) => h.ticker === ticker);
     if (ticker === safeHaven.ticker) {
-      bounds[ticker] = { min: 0.1, max: 0.5 };
-    } else if (
-      effectiveHoldings.find((h) => h.ticker === ticker)?.category === "Stock"
-    ) {
-      bounds[ticker] = { min: 0.05, max: 0.35 };
-    } else {
       bounds[ticker] = { min: 0.05, max: 0.6 };
+    } else if (h?.category === "Stock") {
+      bounds[ticker] = { min: 0.02, max: 0.40 };
+    } else if (h?.category === "Bond ETF") {
+      bounds[ticker] = { min: 0.05, max: 0.5 };
+    } else {
+      bounds[ticker] = { min: 0.02, max: 0.55 };
     }
   }
+
+  // ── Run MVO: minimize volatility ──
 
   const { weights: optimized, stats: optimizedStats } = optimizeMinVariance(
     initialWeights,
     returns,
-    { bounds, step: 0.02, iterations: 1500 },
+    { bounds, step: 0.01, iterations: 3000 },
   );
+
+  // ── Compute Efficient Frontier ──
+
+  let frontier: FrontierPoint[] = [];
+  try {
+    frontier = computeEfficientFrontier(initialWeights, returns, { bounds }, 15)
+      .map((fp) => ({
+        expectedReturn: fp.expectedReturn,
+        volatility: fp.volatility,
+        sharpe: fp.sharpe,
+      }));
+  } catch {
+    // Frontier computation is optional
+  }
+
+  // ── Max drawdown ──
+
+  const maxDDOriginal = portfolioMaxDrawdown(initialWeights, seriesByTicker);
+  const maxDDOptimized = portfolioMaxDrawdown(optimized, seriesByTicker);
+
+  // ── Build result ──
 
   const horizon = Math.max(1, seriesByTicker[tickers[0]]?.length ?? 1);
   const baseScenarioReturn = baseStats.expectedReturn * horizon;
@@ -121,10 +158,16 @@ export async function runScenario(
     ),
     originalScenarioReturnPct: baseScenarioReturn * 100,
     newScenarioReturnPct: newScenarioReturn * 100,
-    originalVolPct: baseStats.volatility * Math.sqrt(12) * 100,
-    newVolPct: optimizedStats.volatility * Math.sqrt(12) * 100,
+    originalVolPct: baseStats.annualizedVol * 100,
+    newVolPct: optimizedStats.annualizedVol * 100,
+    originalSharpe: Math.round(baseStats.sharpeRatio * 100) / 100,
+    newSharpe: Math.round(optimizedStats.sharpeRatio * 100) / 100,
+    maxDrawdownOriginal: Math.round(maxDDOriginal * 1000) / 10,
+    maxDrawdownOptimized: Math.round(maxDDOptimized * 1000) / 10,
+    riskContributions: optimizedStats.riskContributions,
+    efficientFrontier: frontier,
     notes: {
-      tax: "Trims happen on the smallest taxable lots first to keep the tax drag light.",
+      tax: "Trims target the smallest taxable lots first to minimize tax drag.",
       fees: "Estimated trading and spread cost: about $5 across the suggested moves.",
     },
     actions: buildActionSummaries(initialWeights, optimized),
@@ -202,6 +245,12 @@ function fallbackResult(
       newScenarioReturnPct: -3,
       originalVolPct: 18,
       newVolPct: 12,
+      originalSharpe: -0.4,
+      newSharpe: -0.15,
+      maxDrawdownOriginal: 22,
+      maxDrawdownOptimized: 14,
+      riskContributions: {},
+      efficientFrontier: [],
       notes: {
         tax: "Calibrated using prior crisis behavior. Live data will refine this.",
         fees: "Estimated trading cost: about $5 across the suggested moves.",

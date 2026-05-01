@@ -20,6 +20,8 @@ import {
   ChevronRight,
   Shield,
   ArrowRight,
+  Activity,
+  BarChart3,
 } from "lucide-react"
 import {
   BarChart,
@@ -29,40 +31,44 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  LineChart,
+  Line,
 } from "recharts"
-import type { RebalancingResult, ScenarioId } from "@/lib/types"
+import type { RebalancingResult, ScenarioId, FrontierPoint } from "@/lib/types"
 import { authFetch } from "@/lib/api"
 
-const scenarios = [
+const scenarioCards = [
+  {
+    id: "market-crash",
+    title: "Market Crash",
+    description: "What if stocks crash like 2020?",
+    icon: TrendingDown,
+    color: "text-red-500",
+    bgColor: "bg-red-50 dark:bg-red-900/20",
+  },
   {
     id: "inflation",
     title: "Inflation Spike",
-    description: "What if inflation rises to 8%?",
+    description: "What if inflation rises to 8%+?",
     icon: TrendingUp,
     color: "text-orange-500",
     bgColor: "bg-orange-50 dark:bg-orange-900/20",
   },
   {
     id: "recession",
-    title: "Market Recession",
-    description: "What if we enter a recession?",
-    icon: TrendingDown,
-    color: "text-red-500",
-    bgColor: "bg-red-50 dark:bg-red-900/20",
-  },
-  {
-    id: "rate-hike",
-    title: "Interest Rate Hike",
-    description: "What if rates increase by 2%?",
+    title: "Recession",
+    description: "What if we enter a deep recession?",
     icon: DollarSign,
     color: "text-blue-500",
     bgColor: "bg-blue-50 dark:bg-blue-900/20",
   },
   {
-    id: "tech-crash",
-    title: "Tech Sector Crash",
-    description: "What if tech stocks drop 30%?",
+    id: "tech-boom",
+    title: "Tech Boom",
+    description: "What if tech surges like 2023-24?",
     icon: Zap,
     color: "text-purple-500",
     bgColor: "bg-purple-50 dark:bg-purple-900/20",
@@ -70,10 +76,10 @@ const scenarios = [
 ]
 
 const uiToApi: Record<string, ScenarioId> = {
+  "market-crash": "market-drop",
   inflation: "inflation-spike",
   recession: "recession",
-  "rate-hike": "inflation-spike",
-  "tech-crash": "market-drop",
+  "tech-boom": "tech-boom",
 }
 
 interface Recommendation {
@@ -84,6 +90,13 @@ interface Recommendation {
   meta?: string
   originalVol?: number
   newVol?: number
+  originalSharpe?: number
+  newSharpe?: number
+  maxDDOriginal?: number
+  maxDDOptimized?: number
+  riskContributions?: Record<string, number>
+  frontier?: FrontierPoint[]
+  actions?: string[]
 }
 
 const containerVariants = {
@@ -103,6 +116,7 @@ const itemVariants = {
 type ScenarioBundle = {
   scenario: { title: string; marketStory: string }
   result: RebalancingResult
+  explanation?: string
   source: "live" | "fallback"
   warnings: string[]
 }
@@ -123,38 +137,20 @@ export default function ScenariosPage() {
     setScenarioError(null)
 
     try {
-      const scenarioRes = await authFetch("/api/scenario", {
+      const res = await authFetch("/api/scenario", {
         method: "POST",
         body: JSON.stringify({ scenarioId: apiId }),
       })
-      const bundle = (await scenarioRes.json()) as ScenarioBundle & { error?: string }
-      if (!scenarioRes.ok) throw new Error(bundle.error ?? "Scenario engine failed.")
+      const bundle = (await res.json()) as ScenarioBundle & { error?: string }
+      if (!res.ok) throw new Error(bundle.error ?? "Scenario engine failed.")
 
-      let explanation =
-        "Nestor analyzed your portfolio using Alpha Vantage historical data and a min-variance optimizer. Here is the recommended allocation."
-      try {
-        const explainRes = await authFetch("/api/explain", {
-          method: "POST",
-          body: JSON.stringify({
-            result: bundle.result,
-            scenarioTitle: bundle.scenario.title,
-            scenarioStory: bundle.scenario.marketStory,
-          }),
-        })
-        const explainJson = (await explainRes.json()) as {
-          explanation?: string
-          error?: string
-        }
-        if (explainRes.ok && explainJson.explanation) {
-          explanation = explainJson.explanation
-        }
-      } catch {
-        /* Gemini optional */
-      }
+      const explanation =
+        bundle.explanation ||
+        "The optimizer analyzed your portfolio using the covariance matrix from historical data and found a lower-risk allocation."
 
       const metaParts = [
         bundle.source === "live"
-          ? "Live Alpha Vantage + optimizer"
+          ? "Live Alpha Vantage data + MVO engine"
           : "Calibrated fallback",
         ...(bundle.warnings ?? []),
       ]
@@ -167,6 +163,13 @@ export default function ScenariosPage() {
         meta: metaParts.filter(Boolean).join(" · "),
         originalVol: bundle.result.originalVolPct,
         newVol: bundle.result.newVolPct,
+        originalSharpe: bundle.result.originalSharpe,
+        newSharpe: bundle.result.newSharpe,
+        maxDDOriginal: bundle.result.maxDrawdownOriginal,
+        maxDDOptimized: bundle.result.maxDrawdownOptimized,
+        riskContributions: bundle.result.riskContributions,
+        frontier: bundle.result.efficientFrontier,
+        actions: bundle.result.actions,
       })
     } catch (e) {
       setScenarioError(
@@ -179,10 +182,25 @@ export default function ScenariosPage() {
   }
 
   const comparisonData = recommendation
-    ? Object.keys(recommendation.original).map((ticker) => ({
+    ? Object.keys({
+        ...recommendation.original,
+        ...recommendation.recommended,
+      }).map((ticker) => ({
         ticker,
         current: Math.round(recommendation.original[ticker] ?? 0),
         recommended: Math.round(recommendation.recommended[ticker] ?? 0),
+      }))
+    : []
+
+  const frontierData = (recommendation?.frontier ?? []).map((p) => ({
+    volatility: Number(p.volatility.toFixed(1)),
+    return: Number(p.expectedReturn.toFixed(1)),
+  }))
+
+  const riskContribData = recommendation?.riskContributions
+    ? Object.entries(recommendation.riskContributions).map(([ticker, pct]) => ({
+        ticker,
+        contribution: Number(pct),
       }))
     : []
 
@@ -195,8 +213,8 @@ export default function ScenariosPage() {
       >
         <h1 className="text-3xl font-bold text-foreground">What-If Scenarios</h1>
         <p className="text-muted-foreground mt-1">
-          Explore how different market conditions could affect your portfolio and
-          get AI-powered rebalancing recommendations.
+          Stress-test your portfolio against real historical crises. The ML engine uses
+          Mean-Variance Optimization with the covariance matrix from Alpha Vantage data.
         </p>
       </motion.div>
 
@@ -212,7 +230,7 @@ export default function ScenariosPage() {
         animate="visible"
         className="grid grid-cols-1 md:grid-cols-2 gap-4"
       >
-        {scenarios.map((scenario) => (
+        {scenarioCards.map((scenario) => (
           <motion.div key={scenario.id} variants={itemVariants}>
             <motion.div
               whileHover={{ scale: 1.02, y: -2 }}
@@ -248,7 +266,6 @@ export default function ScenariosPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
           >
             <Card>
               <CardContent className="p-8">
@@ -256,9 +273,12 @@ export default function ScenariosPage() {
                   <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
                     <RefreshCw className="w-8 h-8 text-primary" />
                   </motion.div>
-                  <p className="text-muted-foreground">
-                    Analyzing your portfolio with live Alpha Vantage data...
-                  </p>
+                  <div className="text-center">
+                    <p className="text-muted-foreground font-medium">Running Mean-Variance Optimization...</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Fetching historical data, building covariance matrix, computing Efficient Frontier
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -271,13 +291,13 @@ export default function ScenariosPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.4 }}
             className="space-y-6"
           >
+            {/* AI Explanation */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
+              transition={{ delay: 0.1 }}
             >
               <Card className="border-primary/30 bg-primary/5">
                 <CardHeader>
@@ -285,7 +305,7 @@ export default function ScenariosPage() {
                     <Shield className="w-5 h-5 text-primary" />
                     <CardTitle>AI Recommendation</CardTitle>
                   </div>
-                  <CardDescription className="text-base mt-2">
+                  <CardDescription className="text-base mt-2 leading-relaxed">
                     {recommendation.explanation}
                   </CardDescription>
                   {recommendation.meta && (
@@ -295,14 +315,59 @@ export default function ScenariosPage() {
               </Card>
             </motion.div>
 
+            {/* Key Metrics Row */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
+              transition={{ delay: 0.15 }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            >
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs text-muted-foreground">Risk Reduction</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {recommendation.riskReduction}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs text-muted-foreground">Sharpe Ratio</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {recommendation.originalSharpe?.toFixed(2) ?? "—"} → {recommendation.newSharpe?.toFixed(2) ?? "—"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs text-muted-foreground">Volatility (ann.)</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {recommendation.originalVol?.toFixed(1)}% → {recommendation.newVol?.toFixed(1)}%
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs text-muted-foreground">Max Drawdown</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {recommendation.maxDDOriginal?.toFixed(1)}% → {recommendation.maxDDOptimized?.toFixed(1)}%
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Allocation Comparison Chart */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
             >
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Allocation Comparison</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    Allocation Comparison
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-72">
@@ -313,7 +378,7 @@ export default function ScenariosPage() {
                         <YAxis fontSize={12} tickFormatter={(v) => `${v}%`} />
                         <Tooltip formatter={(v: number) => `${v}%`} />
                         <Bar dataKey="current" name="Current" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} opacity={0.5} />
-                        <Bar dataKey="recommended" name="Recommended" fill="hsl(221, 83%, 53%)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="recommended" name="Optimized" fill="hsl(221, 83%, 53%)" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -322,10 +387,99 @@ export default function ScenariosPage() {
             </motion.div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Efficient Frontier */}
+              {frontierData.length > 2 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-primary" />
+                        Efficient Frontier
+                      </CardTitle>
+                      <CardDescription>
+                        Each point is an optimal portfolio for a given return level
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={frontierData}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <XAxis
+                              dataKey="volatility"
+                              fontSize={11}
+                              label={{ value: "Volatility %", position: "bottom", offset: -5, fontSize: 11 }}
+                            />
+                            <YAxis
+                              dataKey="return"
+                              fontSize={11}
+                              label={{ value: "Return %", angle: -90, position: "insideLeft", offset: 10, fontSize: 11 }}
+                            />
+                            <Tooltip
+                              formatter={(v: number, name: string) =>
+                                [`${v}%`, name === "return" ? "Expected Return" : "Volatility"]
+                              }
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="return"
+                              stroke="hsl(221, 83%, 53%)"
+                              strokeWidth={2}
+                              dot={{ r: 4, fill: "hsl(221, 83%, 53%)" }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Risk Contributions */}
+              {riskContribData.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                        Risk Contribution by Asset
+                      </CardTitle>
+                      <CardDescription>
+                        How much each asset contributes to total portfolio risk
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={riskContribData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <XAxis type="number" fontSize={11} tickFormatter={(v) => `${v}%`} />
+                            <YAxis dataKey="ticker" type="category" fontSize={12} width={50} />
+                            <Tooltip formatter={(v: number) => `${v}%`} />
+                            <Bar dataKey="contribution" name="Risk %" fill="hsl(24, 95%, 53%)" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Allocation Detail Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.3 }}
+                transition={{ delay: 0.3 }}
               >
                 <Card>
                   <CardHeader>
@@ -341,10 +495,10 @@ export default function ScenariosPage() {
                           key={ticker}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.3, delay: 0.3 + index * 0.05 }}
+                          transition={{ delay: 0.3 + index * 0.05 }}
                           className="flex items-center gap-3"
                         >
-                          <span className="w-12 font-mono text-sm font-medium text-foreground">{ticker}</span>
+                          <span className="w-12 font-mono text-sm font-medium">{ticker}</span>
                           <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
                             <motion.div
                               className="h-full bg-muted-foreground/50 rounded-full"
@@ -364,13 +518,13 @@ export default function ScenariosPage() {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.3 }}
+                transition={{ delay: 0.3 }}
               >
                 <Card className="border-green-500/30">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Shield className="w-4 h-4 text-green-500" />
-                      Recommended Allocation
+                      Optimized Allocation
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -380,10 +534,10 @@ export default function ScenariosPage() {
                           key={ticker}
                           initial={{ opacity: 0, x: 10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.3, delay: 0.3 + index * 0.05 }}
+                          transition={{ delay: 0.3 + index * 0.05 }}
                           className="flex items-center gap-3"
                         >
-                          <span className="w-12 font-mono text-sm font-medium text-foreground">{ticker}</span>
+                          <span className="w-12 font-mono text-sm font-medium">{ticker}</span>
                           <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
                             <motion.div
                               className="h-full bg-primary rounded-full"
@@ -401,29 +555,45 @@ export default function ScenariosPage() {
               </motion.div>
             </div>
 
+            {/* Actions */}
+            {recommendation.actions && recommendation.actions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Suggested Moves</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {recommendation.actions.map((action, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <ArrowRight className="w-3 h-3 text-primary flex-shrink-0" />
+                          <span className="text-foreground">{action}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Execute Button */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.5 }}
+              transition={{ delay: 0.5 }}
             >
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">Expected Risk Reduction</p>
-                      <motion.p
-                        initial={{ scale: 0.5, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ type: "spring", stiffness: 200, delay: 0.6 }}
-                        className="text-3xl font-bold text-green-600 dark:text-green-400"
-                      >
-                        {recommendation.riskReduction}
-                      </motion.p>
-                      {recommendation.originalVol != null && recommendation.newVol != null && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Volatility: {recommendation.originalVol.toFixed(1)}% → {recommendation.newVol.toFixed(1)}%
-                        </p>
-                      )}
+                      <p className="text-sm text-muted-foreground">This proposal has been saved to your account</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Method: Mean-Variance Optimization · Covariance matrix from historical returns · Efficient Frontier
+                      </p>
                     </div>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <Button className="gap-2" size="lg">
