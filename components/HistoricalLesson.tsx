@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen, LineChart, Sparkles } from "lucide-react";
 
@@ -14,7 +14,10 @@ import {
 } from "@/components/ui/card";
 import { authFetch } from "@/lib/api";
 import { formatPercent, usdDetail } from "@/lib/format";
+import { useXP } from "@/hooks/useXP";
 import { cn } from "@/lib/utils";
+
+const LESSON_COMPLETE_XP = 50;
 
 const RETURN_EPS = 0.05;
 
@@ -57,12 +60,15 @@ export function HistoricalLesson({
   userChoice: userChoiceProp,
   className,
 }: HistoricalLessonProps) {
+  const { awardXP } = useXP();
+  const lessonXpAwardedRef = useRef(false);
   const [step, setStep] = useState<Step>(1);
   const [portfolioValue, setPortfolioValue] = useState<number>(0);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [pickedChoice, setPickedChoice] = useState<string | null>(
     userChoiceProp ?? null,
   );
+  const [xpAwardError, setXpAwardError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userChoiceProp) setPickedChoice(userChoiceProp);
@@ -133,6 +139,38 @@ export function HistoricalLesson({
 
   const canAdvanceStep3 = Boolean(pickedChoice);
 
+  const goToStep = useCallback(
+    (next: Step) => {
+      if (next === 1) {
+        lessonXpAwardedRef.current = false;
+        setXpAwardError(null);
+      }
+      setStep(next);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (step !== 4 || instinct === null || lessonXpAwardedRef.current) return;
+
+    lessonXpAwardedRef.current = true;
+    setXpAwardError(null);
+
+    void (async () => {
+      try {
+        await awardXP(
+          LESSON_COMPLETE_XP,
+          `Trading School lesson complete: ${lessonTitle}`,
+        );
+      } catch (e) {
+        lessonXpAwardedRef.current = false;
+        const msg =
+          e instanceof Error ? e.message : "Could not add XP. Try again when signed in.";
+        setXpAwardError(msg);
+      }
+    })();
+  }, [step, instinct, awardXP, lessonTitle]);
+
   return (
     <div className={cn("mx-auto max-w-5xl space-y-8", className)}>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -149,7 +187,7 @@ export function HistoricalLesson({
             <CardDescription>{lessonSubtitle}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-end">
-            <Button onClick={() => setStep(2)} className="gap-2">
+            <Button onClick={() => goToStep(2)} className="gap-2">
               Continue <ArrowRight className="size-4" />
             </Button>
           </CardContent>
@@ -170,10 +208,10 @@ export function HistoricalLesson({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setStep(1)}>
+            <Button variant="outline" onClick={() => goToStep(1)}>
               Back
             </Button>
-            <Button onClick={() => setStep(3)} className="gap-2">
+            <Button onClick={() => goToStep(3)} className="gap-2">
               Make a choice <ArrowRight className="size-4" />
             </Button>
           </CardContent>
@@ -205,12 +243,12 @@ export function HistoricalLesson({
               ))}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setStep(2)}>
+              <Button variant="outline" onClick={() => goToStep(2)}>
                 Back
               </Button>
               <Button
                 disabled={!canAdvanceStep3}
-                onClick={() => setStep(4)}
+                onClick={() => goToStep(4)}
                 className="gap-2"
               >
                 See reveal <ArrowRight className="size-4" />
@@ -286,6 +324,12 @@ export function HistoricalLesson({
             </div>
           </div>
 
+          {xpAwardError && (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {xpAwardError}
+            </p>
+          )}
+
           {/* Your Instinct Score */}
           {instinct && (
             <Card className="border-primary/25 bg-muted/30">
@@ -296,9 +340,16 @@ export function HistoricalLesson({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm leading-relaxed text-foreground">
+                <p className="text-muted-foreground">
+                  Lesson complete — you earned{" "}
+                  <span className="font-semibold text-foreground">
+                    +{LESSON_COMPLETE_XP} XP
+                  </span>{" "}
+                  (shown in the header when you&apos;re signed in).
+                </p>
                 {instinct.matchedOptimal ? (
                   <p className="font-medium text-green-700 dark:text-green-400">
-                    Perfect call — you matched the optimal strategy. +50 XP
+                    Perfect call — you matched the optimal strategy.
                   </p>
                 ) : instinct.gap > 0 && instinct.gap <= 10 ? (
                   <p>
@@ -327,8 +378,7 @@ export function HistoricalLesson({
                 ) : (
                   /* user beat optimal slightly — treat like perfect per spec bands */
                   <p className="font-medium text-green-700 dark:text-green-400">
-                    Perfect call — you matched or beat the optimal strategy. +50
-                    XP
+                    Perfect call — you matched or beat the optimal strategy.
                   </p>
                 )}
               </CardContent>
@@ -336,10 +386,10 @@ export function HistoricalLesson({
           )}
 
           <div className="flex flex-wrap justify-between gap-2">
-            <Button variant="outline" onClick={() => setStep(3)}>
+            <Button variant="outline" onClick={() => goToStep(3)}>
               Back to choice
             </Button>
-            <Button variant="outline" onClick={() => setStep(1)}>
+            <Button variant="outline" onClick={() => goToStep(1)}>
               Start over
             </Button>
           </div>

@@ -23,18 +23,36 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [hint, setHint] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [newsFilter, setNewsFilter] = useState<"company" | "macro">("company")
+  const [newsFilter, setNewsFilter] = useState<"company" | "macro">(
+    () => (tickers.length > 0 ? "company" : "macro"),
+  )
+
+  useEffect(() => {
+    setNewsFilter(tickers.length > 0 ? "company" : "macro")
+  }, [tickers.join(",")])
 
   const fetchNews = async () => {
     setLoading(true)
     setError(null)
+    setHint(null)
     try {
-      const query = tickers.length > 0 ? `?tickers=${tickers.join(",")}` : ""
+      const query =
+        tickers.length > 0 ? `?tickers=${encodeURIComponent(tickers.join(","))}` : ""
       const res = await fetch(`/api/news${query}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to fetch news")
+      const data = (await res.json()) as {
+        news?: NewsItem[]
+        error?: string
+        detail?: string
+        hint?: string
+      }
+      if (!res.ok) {
+        const msg = [data.error, data.detail].filter(Boolean).join(" — ")
+        throw new Error(msg || "Failed to fetch news")
+      }
       setNews(data.news || [])
+      setHint(typeof data.hint === "string" ? data.hint : null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading news")
     } finally {
@@ -43,14 +61,14 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
   }
 
   useEffect(() => {
-    fetchNews()
+    void fetchNews()
   }, [tickers.join(",")])
 
   if (loading) {
     return (
       <div className="w-full py-6 flex flex-col items-center justify-center space-y-4 border rounded-xl bg-card/50">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Analyzing latest market events...</p>
+        <p className="text-sm text-muted-foreground">Loading Live Events (Finnhub + Gemini)…</p>
       </div>
     )
   }
@@ -61,7 +79,7 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
           <Newspaper className="w-8 h-8 text-destructive/50 mb-2" />
           <p className="text-sm text-destructive">{error}</p>
-          <Button variant="outline" size="sm" onClick={fetchNews} className="mt-4">
+          <Button variant="outline" size="sm" onClick={() => void fetchNews()} className="mt-4">
             <RefreshCw className="w-4 h-4 mr-2" />
             Try again
           </Button>
@@ -71,10 +89,31 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
   }
 
   if (news.length === 0) {
-    return null
+    return (
+      <Card className="border-dashed">
+        <CardContent className="py-8 text-center space-y-2">
+          <h2 className="text-lg font-bold text-foreground flex items-center justify-center gap-2">
+            <Newspaper className="w-5 h-5 text-primary" />
+            Live Events
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            {hint ??
+              "No headlines returned. Set FINNHUB_API_KEY and GEMINI_API_KEY in .env.local, then refresh."}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void fetchNews()} className="mt-2">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </CardContent>
+      </Card>
+    )
   }
 
-  const filteredNews = news.filter(n => n.newsType === newsFilter);
+  let railItems = news.filter((n) => n.newsType === newsFilter)
+  const filterFallback = railItems.length === 0 && news.length > 0
+  if (filterFallback) {
+    railItems = news
+  }
 
   return (
     <div className="relative group w-full space-y-2">
@@ -106,6 +145,16 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
         </div>
       </div>
 
+      {filterFallback && (
+        <p className="text-xs text-muted-foreground px-4 sm:px-0">
+          No stories in the &quot;{newsFilter === "company" ? "My Portfolio" : "Broad Market"}&quot; tab for this batch
+          — showing all loaded headlines. Try the other tab or refresh shortly.
+        </p>
+      )}
+      {hint && !filterFallback && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 px-4 sm:px-0">{hint}</p>
+      )}
+
       <div className="relative overflow-hidden py-4 -mx-4 px-4 sm:mx-0 sm:px-0 group w-full">
       <style>{`
         @keyframes custom-marquee {
@@ -121,9 +170,9 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
       `}</style>
       <div 
         className="flex w-max animate-custom-marquee gap-4 items-start"
-        style={{ animationDuration: `${filteredNews.length * 8}s` }}
+        style={{ animationDuration: `${Math.max(railItems.length, 1) * 8}s` }}
       >
-        {[...filteredNews, ...filteredNews].map((item, index) => {
+        {[...railItems, ...railItems].map((item, index) => {
           // We use index in the key because items are duplicated
           const uniqueKey = `${item.id}-${index}`
           const isExpanded = expandedId === uniqueKey

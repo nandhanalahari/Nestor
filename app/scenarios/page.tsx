@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Activity,
   BarChart3,
+  MessageSquare,
 } from "lucide-react"
 import {
   BarChart,
@@ -37,8 +38,19 @@ import {
   LineChart,
   Line,
 } from "recharts"
-import type { RebalancingResult, ScenarioId, FrontierPoint, XGBPrediction, LSTMPrediction } from "@/lib/types"
+import type {
+  RebalancingResult,
+  ScenarioId,
+  FrontierPoint,
+  XGBPrediction,
+  StockRiskScore,
+  ResolvedCustomScenario,
+} from "@/lib/types"
 import { authFetch } from "@/lib/api"
+import { useRouter } from "next/navigation"
+import { Textarea } from "@/components/ui/textarea"
+
+const CUSTOM_CHAT_ID = "custom-chat"
 
 const scenarioCards = [
   {
@@ -98,11 +110,12 @@ interface Recommendation {
   frontier?: FrontierPoint[]
   actions?: string[]
   predictions?: Record<string, XGBPrediction>
-  lstmPredictions?: Record<string, LSTMPrediction>
   pipeline?: string
   scenarioActualCurrent?: number
   scenarioActualOptimized?: number
   method?: string
+  riskScores?: Record<string, StockRiskScore>
+  customScenario?: ResolvedCustomScenario & { userPrompt?: string }
 }
 
 const containerVariants = {
@@ -121,9 +134,9 @@ const itemVariants = {
 
 type ScenarioBundle = {
   scenario: { title: string; marketStory: string }
+  resolvedCustom?: ResolvedCustomScenario & { userPrompt?: string }
   result: RebalancingResult & {
     predictions?: Record<string, XGBPrediction>
-    lstmPredictions?: Record<string, LSTMPrediction>
     xgbImportanceText?: string
     pipeline?: string
   }
@@ -133,10 +146,53 @@ type ScenarioBundle = {
 }
 
 export default function ScenariosPage() {
+  const router = useRouter()
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [scenarioError, setScenarioError] = useState<string | null>(null)
+  const [applyBusy, setApplyBusy] = useState(false)
+  const [applyMsg, setApplyMsg] = useState<string | null>(null)
+  const [customPrompt, setCustomPrompt] = useState("")
+
+  const applyBundle = (bundle: ScenarioBundle) => {
+    const explanation =
+      bundle.explanation ||
+      "The optimizer analyzed your portfolio using the covariance matrix from historical data and found a lower-risk allocation."
+
+    const sourceLabel =
+      bundle.source === "xgboost-mvo"
+        ? "XGBoost + FRED + scenario-window MVO (Yahoo/Kaggle prices)"
+        : bundle.source === "live"
+          ? "Live Yahoo Finance data + MVO engine"
+          : "Calibrated fallback"
+
+    const metaParts = [sourceLabel, ...(bundle.warnings ?? [])]
+
+    setRecommendation({
+      original: bundle.result.originalAllocation,
+      recommended: bundle.result.newAllocation,
+      riskReduction: bundle.result.expectedRiskReduction,
+      explanation,
+      meta: metaParts.filter(Boolean).join(" · "),
+      originalVol: bundle.result.originalVolPct,
+      newVol: bundle.result.newVolPct,
+      originalSharpe: bundle.result.originalSharpe,
+      newSharpe: bundle.result.newSharpe,
+      maxDDOriginal: bundle.result.maxDrawdownOriginal,
+      maxDDOptimized: bundle.result.maxDrawdownOptimized,
+      riskContributions: bundle.result.riskContributions,
+      frontier: bundle.result.efficientFrontier,
+      actions: bundle.result.actions,
+      predictions: bundle.result.predictions,
+      pipeline: bundle.result.pipeline,
+      scenarioActualCurrent: bundle.result.scenarioActualReturnCurrent,
+      scenarioActualOptimized: bundle.result.scenarioActualReturnOptimized,
+      method: bundle.result.method,
+      riskScores: bundle.result.riskScores,
+      customScenario: bundle.resolvedCustom,
+    })
+  }
 
   const handleScenarioSelect = async (id: string) => {
     const apiId = uiToApi[id]
@@ -146,6 +202,7 @@ export default function ScenariosPage() {
     setSelectedScenario(id)
     setRecommendation(null)
     setScenarioError(null)
+    setApplyMsg(null)
 
     try {
       const res = await authFetch("/api/scenario", {
@@ -154,45 +211,7 @@ export default function ScenariosPage() {
       })
       const bundle = (await res.json()) as ScenarioBundle & { error?: string }
       if (!res.ok) throw new Error(bundle.error ?? "Scenario engine failed.")
-
-      const explanation =
-        bundle.explanation ||
-        "The optimizer analyzed your portfolio using the covariance matrix from historical data and found a lower-risk allocation."
-
-      const sourceLabel =
-        bundle.source === "xgboost-mvo"
-          ? "XGBoost predictions → PyPortfolioOpt MVO"
-          : bundle.source === "live"
-            ? "Live Alpha Vantage data + MVO engine"
-            : "Calibrated fallback"
-
-      const metaParts = [
-        sourceLabel,
-        ...(bundle.warnings ?? []),
-      ]
-
-      setRecommendation({
-        original: bundle.result.originalAllocation,
-        recommended: bundle.result.newAllocation,
-        riskReduction: bundle.result.expectedRiskReduction,
-        explanation,
-        meta: metaParts.filter(Boolean).join(" · "),
-        originalVol: bundle.result.originalVolPct,
-        newVol: bundle.result.newVolPct,
-        originalSharpe: bundle.result.originalSharpe,
-        newSharpe: bundle.result.newSharpe,
-        maxDDOriginal: bundle.result.maxDrawdownOriginal,
-        maxDDOptimized: bundle.result.maxDrawdownOptimized,
-        riskContributions: bundle.result.riskContributions,
-        frontier: bundle.result.efficientFrontier,
-        actions: bundle.result.actions,
-        predictions: bundle.result.predictions,
-        lstmPredictions: bundle.result.lstmPredictions,
-        pipeline: bundle.result.pipeline,
-        scenarioActualCurrent: bundle.result.scenarioActualReturnCurrent,
-        scenarioActualOptimized: bundle.result.scenarioActualReturnOptimized,
-        method: bundle.result.method,
-      })
+      applyBundle(bundle)
     } catch (e) {
       setScenarioError(
         e instanceof Error ? e.message : "Could not run this scenario.",
@@ -200,6 +219,56 @@ export default function ScenariosPage() {
       setSelectedScenario(null)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleCustomScenarioSubmit = async () => {
+    const text = customPrompt.trim()
+    if (text.length < 10) {
+      setScenarioError("Add a bit more detail so we can map your question to a real historical period.")
+      return
+    }
+
+    setIsLoading(true)
+    setSelectedScenario(CUSTOM_CHAT_ID)
+    setRecommendation(null)
+    setScenarioError(null)
+    setApplyMsg(null)
+
+    try {
+      const res = await authFetch("/api/scenario", {
+        method: "POST",
+        body: JSON.stringify({ customPrompt: text }),
+      })
+      const bundle = (await res.json()) as ScenarioBundle & { error?: string }
+      if (!res.ok) throw new Error(bundle.error ?? "Scenario engine failed.")
+      applyBundle(bundle)
+    } catch (e) {
+      setScenarioError(
+        e instanceof Error ? e.message : "Could not run this scenario.",
+      )
+      setSelectedScenario(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleApplyRebalance = async () => {
+    if (!recommendation) return
+    setApplyBusy(true)
+    setApplyMsg(null)
+    try {
+      const res = await authFetch("/api/portfolio/apply-targets", {
+        method: "POST",
+        body: JSON.stringify({ targets: recommendation.recommended }),
+      })
+      const data = (await res.json()) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Could not update portfolio.")
+      router.push("/dashboard")
+    } catch (e) {
+      setApplyMsg(e instanceof Error ? e.message : "Could not apply allocation.")
+    } finally {
+      setApplyBusy(false)
     }
   }
 
@@ -233,12 +302,12 @@ export default function ScenariosPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <h1 className="text-3xl font-bold text-foreground">What-If Scenarios</h1>
+        <h1 className="text-3xl font-bold text-foreground">Scenario-Driven Rebalancing</h1>
         <p className="text-muted-foreground mt-1">
-          Stress-test your portfolio with XGBoost predictions enhanced by FRED macroeconomic data,
-          fed into Mean-Variance Optimization. The model trains on your stocks&apos; historical data
-          plus real economic indicators (Fed rate, inflation, unemployment, VIX) to predict which
-          assets will perform best.
+          Stress-test your portfolio against historical regimes, then apply a lower-risk allocation back into
+          your Nestor holdings. The optimizer uses returns and covariance from each scenario&apos;s date window
+          (same windows on the server and in the TypeScript fallback), plus XGBoost on Kaggle/Yahoo history and FRED
+          for macro context and per-stock risk scores.
         </p>
       </motion.div>
 
@@ -281,6 +350,65 @@ export default function ScenariosPage() {
             </motion.div>
           </motion.div>
         ))}
+        <motion.div key="custom-chat" variants={itemVariants} className="md:col-span-2">
+          <Card
+            className={`border-2 transition-shadow ${selectedScenario === CUSTOM_CHAT_ID ? "border-primary/60 shadow-md" : "border-border"}`}
+          >
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-violet-50 dark:bg-violet-950/40">
+                  <MessageSquare className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Ask a custom historical “what if”</CardTitle>
+                  <CardDescription>
+                    Describe a worry or shock in plain English. We map it to a real past episode with a date window—the
+                    same optimizer and scenario covariance logic as the cards above.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder='e.g. "What if oil spikes like the 1970s?" or "Another flash crash like 2010?"'
+                className="min-h-[88px] resize-y"
+                disabled={isLoading}
+              />
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Euro debt crisis stress like 2011",
+                  "Taper tantrum bond shock 2013",
+                  "Dot-com bust around 2000–02",
+                ].map((ex) => (
+                  <Button
+                    key={ex}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    disabled={isLoading}
+                    onClick={() => {
+                      setCustomPrompt(ex)
+                      setScenarioError(null)
+                    }}
+                  >
+                    {ex}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                className="gap-2"
+                disabled={isLoading || customPrompt.trim().length < 10}
+                onClick={() => void handleCustomScenarioSubmit()}
+              >
+                Run custom scenario
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       </motion.div>
 
       <AnimatePresence mode="wait">
@@ -317,6 +445,50 @@ export default function ScenariosPage() {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
+            {/* Resolved custom scenario (historical anchor) */}
+            {recommendation.customScenario && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
+                <Card className="border-violet-500/30 bg-violet-500/5 dark:bg-violet-950/20">
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                      Your prompt → historical window
+                    </CardTitle>
+                    <CardDescription className="text-foreground/90">
+                      <span className="font-medium text-foreground">{recommendation.customScenario.title}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {recommendation.customScenario.eventName} ({recommendation.customScenario.year})
+                      </span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0 text-sm text-muted-foreground space-y-2">
+                    {recommendation.customScenario.userPrompt && (
+                      <p>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/80">
+                          You asked
+                        </span>
+                        <br />
+                        <span className="text-foreground/90">&ldquo;{recommendation.customScenario.userPrompt}&rdquo;</span>
+                      </p>
+                    )}
+                    <p>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/80">
+                        Stress-test window
+                      </span>
+                      <br />
+                      {recommendation.customScenario.windowStart} → {recommendation.customScenario.windowEnd}
+                    </p>
+                    <p className="text-foreground/85 leading-relaxed">{recommendation.customScenario.marketStory}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
             {/* AI Explanation — Structured with Transparency */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -563,85 +735,57 @@ export default function ScenariosPage() {
               </motion.div>
             )}
 
-            {/* LSTM Predictions */}
-            {recommendation.lstmPredictions && Object.keys(recommendation.lstmPredictions).length > 0 && (
+            {/* Per-stock risk (FRED regime + Yahoo/Kaggle history) */}
+            {recommendation.riskScores && Object.keys(recommendation.riskScores).length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.19 }}
+                transition={{ delay: 0.185 }}
               >
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-blue-500" />
-                      LSTM 30-Day Forecast
+                      <Shield className="w-5 h-5 text-amber-500" />
+                      Risk scores by holding
                     </CardTitle>
                     <CardDescription>
-                      A 2-layer LSTM neural network trained on 5 years of price history per stock
+                      0–100 scale (higher = more risk). Blends realized volatility and beta vs SPY from price data with
+                      a FRED-based macro stress reading (VIX, Fed funds, yield curve).
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {Object.entries(recommendation.lstmPredictions).map(([ticker, pred]) => (
+                      {Object.entries(recommendation.riskScores).map(([ticker, r]) => (
                         <div key={ticker} className="rounded-lg border p-4 space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="font-mono font-semibold text-foreground">{ticker}</span>
                             <span
                               className={`text-sm font-medium ${
-                                (pred.predicted_return ?? 0) > 0
-                                  ? "text-green-600 dark:text-green-400"
-                                  : "text-red-600 dark:text-red-400"
+                                r.risk_score >= 67
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : r.risk_score >= 34
+                                    ? "text-foreground"
+                                    : "text-green-600 dark:text-green-400"
                               }`}
                             >
-                              {(pred.predicted_return ?? 0) > 0 ? "+" : ""}
-                              {(pred.predicted_return ?? 0).toFixed(2)}%
+                              {r.risk_score} — {r.label}
                             </span>
                           </div>
-                          {pred.current_price !== undefined && (
-                            <div className="flex items-center justify-between text-sm text-muted-foreground">
-                              <span>Current</span>
-                              <span>${pred.current_price.toFixed(2)}</span>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{r.summary}</p>
+                          <div className="text-xs text-muted-foreground space-y-1 pt-1 border-t">
+                            <div className="flex justify-between">
+                              <span>Ann. vol</span>
+                              <span>{r.yahoo.annualized_vol_pct}%</span>
                             </div>
-                          )}
-                          {pred.forecast?.length > 0 && (
-                            <div className="flex items-center justify-between text-sm text-muted-foreground">
-                              <span>30-day target</span>
-                              <span>${pred.forecast[pred.forecast.length - 1].price.toFixed(2)}</span>
+                            <div className="flex justify-between">
+                              <span>Beta vs SPY</span>
+                              <span>{r.yahoo.beta_vs_spy}</span>
                             </div>
-                          )}
-                          <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <span>Annualized vol</span>
-                            <span>{(pred.predicted_vol ?? 0).toFixed(1)}%</span>
+                            <div className="flex justify-between">
+                              <span>Macro stress</span>
+                              <span>{r.macro.regime_stress_0_100}/100</span>
+                            </div>
                           </div>
-                          {pred.forecast?.length > 0 && (
-                            <div className="pt-2 border-t">
-                              <div className="h-12">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <LineChart
-                                    data={pred.forecast.map((p) => ({
-                                      date: p.date,
-                                      price: p.price,
-                                    }))}
-                                  >
-                                    <Line
-                                      type="monotone"
-                                      dataKey="price"
-                                      stroke="hsl(199, 89%, 48%)"
-                                      strokeWidth={2}
-                                      dot={false}
-                                    />
-                                    <Tooltip
-                                      formatter={(v: number) => `$${v.toFixed(2)}`}
-                                      contentStyle={{ fontSize: "11px" }}
-                                    />
-                                  </LineChart>
-                                </ResponsiveContainer>
-                              </div>
-                            </div>
-                          )}
-                          {pred.error && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400">{pred.error}</p>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -882,17 +1026,37 @@ export default function ScenariosPage() {
             >
               <Card>
                 <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">This proposal has been saved to your account</p>
+                      <p className="text-sm text-muted-foreground">
+                        Proposal saved to your account. Apply updates your Nestor portfolio weights at current Yahoo
+                        quotes (paper portfolio). Place the same trades at your real broker to invest actual capital.
+                      </p>
+                      {applyMsg && (
+                        <p className="text-xs text-destructive mt-2">{applyMsg}</p>
+                      )}
                       <p className="text-xs text-muted-foreground mt-1">
                         Pipeline: XGBoost (predictor) → PyPortfolioOpt MVO (optimizer) → Gemini (translator)
                       </p>
                     </div>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Button className="gap-2" size="lg">
-                        Execute Rebalance
-                        <ArrowRight className="w-4 h-4" />
+                      <Button
+                        className="gap-2"
+                        size="lg"
+                        disabled={applyBusy}
+                        onClick={() => void handleApplyRebalance()}
+                      >
+                        {applyBusy ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Applying…
+                          </>
+                        ) : (
+                          <>
+                            Apply allocation to portfolio
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
                       </Button>
                     </motion.div>
                   </div>

@@ -28,7 +28,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/history", label: "History", icon: History },
   { href: "/trending", label: "Trending", icon: Flame },
-  { href: "/scenarios", label: "What-If Scenarios", icon: GitBranch },
+  { href: "/scenarios", label: "Rebalance", icon: GitBranch },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/lessons", label: "Trading School", icon: BookOpen },
   { href: "/goals", label: "My Goals", icon: Target },

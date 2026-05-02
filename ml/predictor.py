@@ -1,6 +1,6 @@
 """XGBoost predictor — the 'Eyes' of the pipeline.
 
-Trains on historical Alpha Vantage data for each ticker and predicts:
+Trains on historical prices (Kaggle CSV + Yahoo Finance fallback) for each ticker and predicts:
   1. Expected forward return (1-month)
   2. Expected forward volatility (3-month)
 

@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { runScenario } from "@/lib/scenario";
-import { explainRebalancing } from "@/lib/gemini";
-import type { Holding, ScenarioId } from "@/lib/types";
+import { runScenario, runCustomScenario } from "@/lib/scenario";
+import { explainRebalancing, resolveCustomScenarioFromPrompt } from "@/lib/gemini";
+import type { Holding, ScenarioId, RebalancingResult, ResolvedCustomScenario } from "@/lib/types";
+import { scenarios } from "@/lib/portfolio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ML_API = process.env.ML_API_URL || "http://127.0.0.1:8000";
+
+type ScenarioBody = {
+  scenarioId?: ScenarioId;
+  customPrompt?: string;
+};
+
+const PRESET_IDS = new Set<Exclude<ScenarioId, "custom">>([
+  "market-drop",
+  "inflation-spike",
+  "recession",
+  "tech-boom",
+]);
+
+function isPresetId(id: unknown): id is Exclude<ScenarioId, "custom"> {
+  return typeof id === "string" && PRESET_IDS.has(id as Exclude<ScenarioId, "custom">);
+}
 
 async function mlFetch(path: string, options: RequestInit, retries = 2): Promise<Response | null> {
   for (let i = 0; i <= retries; i++) {
@@ -36,18 +53,59 @@ function getSupabase(accessToken: string) {
 }
 
 export async function POST(req: Request) {
-  let body: { scenarioId?: ScenarioId } = {};
+  let body: ScenarioBody = {};
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (!body.scenarioId) {
+  const trimmedPrompt =
+    typeof body.customPrompt === "string" ? body.customPrompt.trim() : "";
+  const hasCustom = trimmedPrompt.length > 0;
+  const hasPreset = Boolean(body.scenarioId && body.scenarioId !== "custom");
+
+  if (hasCustom && hasPreset) {
     return NextResponse.json(
-      { error: "scenarioId is required." },
+      { error: "Send either scenarioId (preset) or customPrompt, not both." },
       { status: 400 },
     );
+  }
+  if (!hasCustom && !hasPreset) {
+    return NextResponse.json(
+      { error: "scenarioId or customPrompt is required." },
+      { status: 400 },
+    );
+  }
+  if (body.scenarioId === "custom") {
+    return NextResponse.json(
+      {
+        error:
+          'For a custom historical scenario, send customPrompt instead of scenarioId "custom".',
+      },
+      { status: 400 },
+    );
+  }
+
+  let resolvedCustom: ResolvedCustomScenario | undefined;
+  let activePresetId: Exclude<ScenarioId, "custom"> | undefined;
+  let userPromptForResponse: string | undefined;
+
+  if (hasCustom) {
+    try {
+      resolvedCustom = await resolveCustomScenarioFromPrompt(trimmedPrompt);
+      userPromptForResponse = trimmedPrompt;
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Could not resolve scenario." },
+        { status: 400 },
+      );
+    }
+  } else {
+    if (!isPresetId(body.scenarioId)) {
+      return NextResponse.json({ error: "Unknown scenarioId." }, { status: 400 });
+    }
+    activePresetId = body.scenarioId;
   }
 
   let holdings: Holding[] | undefined;
@@ -92,7 +150,6 @@ export async function POST(req: Request) {
           );
         }
 
-        // Fetch user's investment goal for Gemini context
         try {
           const { data: goals } = await supabase
             .from("goals")
@@ -104,7 +161,7 @@ export async function POST(req: Request) {
             userGoalText = goals[0].text;
           }
         } catch {
-          // Goal fetch is non-critical
+          // optional
         }
       }
     } catch {
@@ -112,29 +169,36 @@ export async function POST(req: Request) {
     }
   }
 
-  // ── Try XGBoost + PyPortfolioOpt Python pipeline first ──
+  const scenarioIdForMl: ScenarioId = resolvedCustom ? "custom" : activePresetId!;
+
   if (holdings && holdings.length > 0) {
     try {
+      const mlPayload: Record<string, unknown> = {
+        holdings: holdings.map((h) => ({
+          ticker: h.ticker,
+          name: h.name,
+          category: h.category,
+          weight: h.weight,
+        })),
+        scenario_id: scenarioIdForMl,
+      };
+      if (resolvedCustom) {
+        mlPayload.window_start = resolvedCustom.windowStart;
+        mlPayload.window_end = resolvedCustom.windowEnd;
+      }
+
       const mlRes = await mlFetch("/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          holdings: holdings.map((h) => ({
-            ticker: h.ticker,
-            name: h.name,
-            category: h.category,
-            weight: h.weight,
-          })),
-          scenario_id: body.scenarioId,
-        }),
+        body: JSON.stringify(mlPayload),
       });
 
       if (mlRes?.ok) {
         const mlData = await mlRes.json();
         const opt = mlData.optimization;
 
-        const result = {
-          scenarioId: body.scenarioId,
+        const result: RebalancingResult = {
+          scenarioId: scenarioIdForMl,
           windowStart: mlData.window?.start || "",
           windowEnd: mlData.window?.end || "",
           originalAllocation: opt.current.weights,
@@ -162,21 +226,30 @@ export async function POST(req: Request) {
           },
           actions: opt.actions || [],
           predictions: mlData.predictions,
-          lstmPredictions: mlData.lstm_predictions,
           xgbImportanceText: mlData.xgb_importance_text,
           pipeline: mlData.pipeline,
           maxSharpe: opt.max_sharpe,
           scenarioActualReturnCurrent: opt.scenario_actual_return_current,
           scenarioActualReturnOptimized: opt.scenario_actual_return_optimized,
           method: opt.method,
+          riskScores: mlData.risk_scores as RebalancingResult["riskScores"],
         };
+
+        const presetScenario =
+          activePresetId != null ? scenarios.find((s) => s.id === activePresetId) : undefined;
+        const scenarioTitle =
+          resolvedCustom?.title ?? presetScenario?.title ?? String(scenarioIdForMl);
+        const scenarioStory =
+          resolvedCustom?.marketStory ??
+          presetScenario?.marketStory ??
+          `Scenario window: ${result.windowStart} to ${result.windowEnd}`;
 
         let explanation = "";
         try {
           explanation = await explainRebalancing({
             ownerName: "Investor",
-            scenarioTitle: body.scenarioId,
-            scenarioStory: `Scenario window: ${result.windowStart} to ${result.windowEnd}`,
+            scenarioTitle,
+            scenarioStory,
             goalText: userGoalText,
             result,
             xgbImportanceText: mlData.xgb_importance_text,
@@ -193,7 +266,7 @@ export async function POST(req: Request) {
             await supabase.from("rebalance_proposals").insert({
               user_id: userId,
               scenario_id: result.scenarioId,
-              scenario_title: body.scenarioId,
+              scenario_title: scenarioTitle,
               original_allocation: result.originalAllocation,
               recommended_allocation: result.newAllocation,
               risk_reduction: result.expectedRiskReduction,
@@ -214,10 +287,15 @@ export async function POST(req: Request) {
         }
 
         return NextResponse.json({
-          scenario: {
-            title: body.scenarioId,
-            marketStory: `XGBoost predicted returns → PyPortfolioOpt MVO`,
-          },
+          scenario: { title: scenarioTitle, marketStory: scenarioStory },
+          ...(resolvedCustom && userPromptForResponse
+            ? {
+                resolvedCustom: {
+                  ...resolvedCustom,
+                  userPrompt: userPromptForResponse,
+                },
+              }
+            : {}),
           result,
           explanation,
           source: "xgboost-mvo",
@@ -225,15 +303,15 @@ export async function POST(req: Request) {
         });
       }
     } catch {
-      // Python backend not available — fall through to TypeScript engine
+      // Python backend not available
     }
   }
 
-  // ── Fallback: TypeScript MVO engine ──
   try {
-    const bundle = await runScenario(body.scenarioId, holdings);
+    const bundle = resolvedCustom
+      ? await runCustomScenario(resolvedCustom, holdings)
+      : await runScenario(activePresetId!, holdings);
 
-    // Try to fetch FRED macro data for fallback path too
     let macroSnapshot: Record<string, { name: string; value: number; change_1m?: number | null }> | undefined;
     try {
       const macroRes = await fetch(`${ML_API}/macro`, { signal: AbortSignal.timeout(10_000) });
@@ -242,7 +320,7 @@ export async function POST(req: Request) {
         macroSnapshot = macroData.indicators;
       }
     } catch {
-      // ML pipeline may not be running; macro is optional
+      // optional
     }
 
     let explanation = "";
@@ -286,14 +364,27 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ...bundle, explanation });
+    return NextResponse.json({
+      scenario: { title: bundle.scenario.title, marketStory: bundle.scenario.marketStory },
+      ...(resolvedCustom && userPromptForResponse
+        ? {
+            resolvedCustom: {
+              ...resolvedCustom,
+              userPrompt: userPromptForResponse,
+            },
+          }
+        : {}),
+      result: bundle.result,
+      series: bundle.series,
+      source: bundle.source,
+      warnings: bundle.warnings,
+      explanation,
+    });
   } catch (error) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Scenario engine failed to respond.",
+          error instanceof Error ? error.message : "Scenario engine failed to respond.",
       },
       { status: 500 },
     );

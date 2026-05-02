@@ -18,7 +18,22 @@ export type Quote = {
   asOf: string;
 };
 
-export type ScenarioId = "market-drop" | "inflation-spike" | "recession" | "tech-boom";
+export type ScenarioId =
+  | "market-drop"
+  | "inflation-spike"
+  | "recession"
+  | "tech-boom"
+  | "custom";
+
+/** Gemini maps a user question to a real historical stress window. */
+export type ResolvedCustomScenario = {
+  title: string;
+  eventName: string;
+  year: number;
+  windowStart: string;
+  windowEnd: string;
+  marketStory: string;
+};
 
 export type Scenario = {
   id: ScenarioId;
@@ -38,6 +53,21 @@ export type FrontierPoint = {
   sharpe: number;
 };
 
+export type StockRiskScore = {
+  risk_score: number;
+  label: string;
+  summary: string;
+  yahoo: {
+    annualized_vol_pct: number;
+    beta_vs_spy: number;
+    observation_days: number;
+  };
+  macro: {
+    regime_stress_0_100: number;
+    factors: Record<string, unknown>;
+  };
+};
+
 export type XGBPrediction = {
   ticker: string;
   predicted_return: number;
@@ -45,17 +75,6 @@ export type XGBPrediction = {
   feature_importances: Record<string, number>;
   cv_rmse: number;
   data_points: number;
-  error?: string;
-};
-
-export type LSTMPrediction = {
-  ticker: string;
-  current_price?: number;
-  predicted_return: number;
-  predicted_vol: number;
-  forecast: { date: string; price: number }[];
-  history_days?: number;
-  model?: string;
   error?: string;
 };
 
@@ -82,12 +101,12 @@ export type RebalancingResult = {
   };
   actions: string[];
   predictions?: Record<string, XGBPrediction>;
-  lstmPredictions?: Record<string, LSTMPrediction>;
   xgbImportanceText?: string;
   pipeline?: string;
   scenarioActualReturnCurrent?: number;
   scenarioActualReturnOptimized?: number;
   method?: string;
+  riskScores?: Record<string, StockRiskScore>;
   maxSharpe?: {
     weights: Record<string, number>;
     expected_return: number;

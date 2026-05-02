@@ -22,8 +22,8 @@ from pydantic import BaseModel
 
 from predictor import predict_all, format_importance_for_gemini
 from optimizer import optimize_portfolio
-from lstm_predictor import predict_all_lstm, predict_for_ticker
 from fred_data import get_macro_snapshot, get_macro_features_monthly, FRED_SERIES
+from risk_scores import compute_stock_risk_scores
 
 # Load env from parent .env.local
 env_path = os.path.join(os.path.dirname(__file__), "..", ".env.local")
@@ -83,11 +83,8 @@ async def analyze(req: AnalyzeRequest):
         current_weights[h.ticker.upper()] = h.weight / total if total > 0 else 1 / len(tickers)
 
     # ── Step 1: EYES — XGBoost predictions ──
-    # Note: LSTM is intentionally skipped here — it's too slow (~1-2 min per
-    # ticker). Use the /forecast endpoint for LSTM predictions on demand.
     xgb_result = predict_all(tickers)
     predictions = xgb_result["predictions"]
-    lstm_predictions = {}
 
     # ── Step 2: HANDS — MVO optimization ──
     window = SCENARIO_WINDOWS.get(req.scenario_id, ("", ""))
@@ -109,45 +106,28 @@ async def analyze(req: AnalyzeRequest):
     # ── Step 3: TRANSLATOR — Format for Gemini ──
     importance_text = format_importance_for_gemini(predictions)
 
-    # ── Step 4: Macro context from FRED ──
+    # ── Step 4: Macro (FRED) + per-stock risk scores (FRED regime + Yahoo history) ──
     macro_context = {}
     try:
         macro_context = get_macro_snapshot()
     except Exception as e:
         print(f"[FRED] Could not fetch macro snapshot: {e}")
 
+    risk_scores: dict = {}
+    try:
+        risk_scores = compute_stock_risk_scores(tickers, macro_context)
+    except Exception as e:
+        print(f"[risk_scores] {e}")
+
     return {
         "predictions": predictions,
-        "lstm_predictions": lstm_predictions,
         "optimization": optimization,
         "xgb_importance_text": importance_text,
         "macro_snapshot": macro_context,
+        "risk_scores": risk_scores,
         "scenario_id": req.scenario_id,
         "window": {"start": w_start, "end": w_end},
-        "pipeline": "XGBoost (predictor) + FRED macro data → PyPortfolioOpt MVO with scenario-period data → Gemini (translator). LSTM available via /forecast endpoint.",
-    }
-
-
-class ForecastRequest(BaseModel):
-    tickers: list[str]
-    days: int = 30
-
-
-@app.post("/forecast")
-async def forecast(req: ForecastRequest):
-    """
-    LSTM forecast endpoint for the dashboard.
-    Returns predicted prices for the next N days for each ticker.
-    """
-    if not req.tickers:
-        raise HTTPException(400, "No tickers provided")
-
-    tickers = [t.upper() for t in req.tickers]
-    result = predict_all_lstm(tickers, forecast_days=req.days)
-    return {
-        "predictions": result["predictions"],
-        "errors": result["errors"],
-        "model": "LSTM (PyTorch, 2-layer, 60-day window)",
+        "pipeline": "XGBoost (predictor) + FRED macro data → PyPortfolioOpt MVO with scenario-period data → Gemini (translator).",
     }
 
 
@@ -162,7 +142,7 @@ async def health():
         pass
     return {
         "status": "ok",
-        "pipeline": "XGBoost + LSTM + FRED Macro + PyPortfolioOpt + Gemini",
+        "pipeline": "XGBoost + FRED Macro + PyPortfolioOpt + Gemini",
         "fred_connected": fred_ok,
     }
 

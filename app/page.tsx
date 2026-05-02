@@ -22,25 +22,25 @@ const features = [
     icon: Brain,
     title: "AI-Powered Insights",
     description:
-      "Gemini explains every recommendation in plain English so you always know what's happening.",
+      "Gemini explains allocations, risk scores, and macro context so you know why each position matters.",
   },
   {
     icon: Shield,
-    title: "Risk Management",
+    title: "Scenario stress-tests",
     description:
-      "Stress-test your portfolio against real historical crises with live Alpha Vantage data.",
+      "Replay historical crises with scenario-window mean–variance optimization on live-style price data.",
   },
   {
     icon: Target,
-    title: "Goal Tracking",
+    title: "Goals & portfolio",
     description:
-      "Set financial goals in plain language and get AI guidance to stay on track.",
+      "Track what you are investing for and keep your mix aligned as markets move.",
   },
   {
     icon: LineChart,
-    title: "What-If Scenarios",
+    title: "Rebalance from data",
     description:
-      "Simulate inflation spikes, recessions, and market crashes — see how your portfolio responds.",
+      "See suggested trades from FRED + market data, then apply targets to your Nestor portfolio (execute the same trades at your broker).",
   },
 ]
 
@@ -79,7 +79,7 @@ export default function HomePage() {
           className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6"
         >
           <Zap className="w-4 h-4" />
-          AI-Powered Portfolio Management
+          AI-Powered Investing
         </motion.div>
 
         <motion.h1
@@ -88,8 +88,8 @@ export default function HomePage() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 text-balance"
         >
-          Smarter Investing for{" "}
-          <span className="text-primary">Everyone</span>
+          Build your portfolio.{" "}
+          <span className="text-primary">Invest with a plan.</span>
         </motion.h1>
 
         <motion.p
@@ -98,8 +98,8 @@ export default function HomePage() {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 text-pretty"
         >
-          Nestor uses Gemini AI and live market data to help you make better
-          investment decisions, manage risk, and achieve your financial goals.
+          Nestor tracks your stocks and ETFs, scores risk from markets and Fed data, and runs scenario-driven
+          rebalances you can apply in-app—then mirror at your brokerage when you are ready to put real money to work.
         </motion.p>
 
         <motion.div

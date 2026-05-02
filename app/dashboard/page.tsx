@@ -20,7 +20,6 @@ import {
   BarChart3,
   RefreshCw,
   Activity,
-  Sparkles,
 } from "lucide-react"
 import {
   PieChart as RechartsPie,
@@ -33,12 +32,9 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  LineChart,
-  Line,
-  Legend,
 } from "recharts"
 import type { Holding, Quote } from "@/lib/types"
-import { usd } from "@/lib/format"
+import { usd, usdDetail } from "@/lib/format"
 import { useAuth } from "@/components/auth-provider"
 import { RiskMeter } from "@/components/RiskMeter"
 import { authFetch } from "@/lib/api"
@@ -108,42 +104,10 @@ export default function DashboardPage() {
     shares: "",
     cost_basis: "",
   })
+  const [addLiveQuote, setAddLiveQuote] = useState<{ price: number; asOf: string } | null>(null)
+  const [addQuoteLoading, setAddQuoteLoading] = useState(false)
   const [adding, setAdding] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-
-  type ForecastPoint = { date: string; price: number }
-  type LSTMForecast = {
-    ticker: string
-    current_price?: number
-    predicted_return: number
-    forecast: ForecastPoint[]
-    error?: string
-  }
-  const [forecasts, setForecasts] = useState<Record<string, LSTMForecast>>({})
-  const [forecastLoading, setForecastLoading] = useState(false)
-  const [forecastError, setForecastError] = useState<string | null>(null)
-
-  const fetchForecast = useCallback(async (tickers: string[]) => {
-    if (tickers.length === 0) return
-    setForecastLoading(true)
-    setForecastError(null)
-    try {
-      const res = await authFetch("/api/forecast", {
-        method: "POST",
-        body: JSON.stringify({ tickers, days: 30 }),
-      })
-      const data = await res.json()
-      if (res.ok && data.predictions) {
-        setForecasts(data.predictions)
-      } else {
-        setForecastError(data.error || "Could not run LSTM forecast")
-      }
-    } catch (e) {
-      setForecastError(e instanceof Error ? e.message : "Forecast failed")
-    } finally {
-      setForecastLoading(false)
-    }
-  }, [])
 
   const refreshPrices = useCallback(async (tickers: string[]) => {
     if (tickers.length === 0) return
@@ -184,6 +148,63 @@ export default function DashboardPage() {
     loadPortfolio()
   }, [user, authLoading, router, loadPortfolio])
 
+  useEffect(() => {
+    if (!showAddForm) {
+      setAddLiveQuote(null)
+      setAddQuoteLoading(false)
+      return
+    }
+    const raw = addForm.ticker.trim().toUpperCase()
+    if (!raw) {
+      setAddLiveQuote(null)
+      setAddQuoteLoading(false)
+      return
+    }
+
+    setAddQuoteLoading(true)
+    let cancelled = false
+    const t = setTimeout(async () => {
+      try {
+        const res = await authFetch("/api/cache", {
+          method: "POST",
+          body: JSON.stringify({ tickers: [raw] }),
+        })
+        const data = (await res.json()) as {
+          quotes?: Record<string, { price: number; as_of: string }>
+        }
+        if (cancelled) return
+        const row = data.quotes?.[raw]
+        if (row?.price != null && Number.isFinite(row.price)) {
+          setAddLiveQuote({ price: row.price, asOf: row.as_of })
+          setAddForm((prev) => {
+            const sh = parseFloat(prev.shares)
+            if (Number.isFinite(sh) && sh > 0) {
+              const cost = Math.round(sh * row.price * 100) / 100
+              return { ...prev, cost_basis: cost.toFixed(2) }
+            }
+            const c = parseFloat(prev.cost_basis)
+            if (Number.isFinite(c) && c > 0) {
+              const shFromCost = Math.round((c / row.price) * 10000) / 10000
+              return { ...prev, shares: String(shFromCost) }
+            }
+            return prev
+          })
+        } else {
+          setAddLiveQuote(null)
+        }
+      } catch {
+        if (!cancelled) setAddLiveQuote(null)
+      } finally {
+        if (!cancelled) setAddQuoteLoading(false)
+      }
+    }, 450)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [addForm.ticker, showAddForm])
+
   const quoteByTicker = useMemo(() => {
     const m = new Map<string, Quote>()
     payload?.quotes.forEach((q) => m.set(q.ticker, q))
@@ -223,6 +244,11 @@ export default function DashboardPage() {
 
   const handleAddHolding = async () => {
     if (!addForm.ticker || !addForm.name) return
+    const sh = parseFloat(addForm.shares) || 0
+    let cost = parseFloat(addForm.cost_basis) || 0
+    if (addLiveQuote && sh > 0) {
+      cost = Math.round(sh * addLiveQuote.price * 100) / 100
+    }
     setAdding(true)
     try {
       const res = await authFetch("/api/holdings", {
@@ -231,12 +257,13 @@ export default function DashboardPage() {
           ticker: addForm.ticker,
           name: addForm.name,
           category: addForm.category,
-          shares: parseFloat(addForm.shares) || 0,
-          cost_basis: parseFloat(addForm.cost_basis) || 0,
+          shares: sh,
+          cost_basis: cost,
         }),
       })
       if (res.ok) {
         setAddForm({ ticker: "", name: "", category: "Stock", shares: "", cost_basis: "" })
+        setAddLiveQuote(null)
         setShowAddForm(false)
         await loadPortfolio()
       }
@@ -285,7 +312,7 @@ export default function DashboardPage() {
             {isEmpty
               ? "Add your first holding to get started."
               : payload?.asOf
-                ? `Live quotes as of ${payload.asOf} via Yahoo Finance.`
+                ? `Live quotes as of ${payload.asOf} — add positions here (paper portfolio); place real trades at your broker.`
                 : "Loading your portfolio..."}
           </p>
           {loadError && (
@@ -323,14 +350,14 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* Cause-Effect News Rail */}
-      {!isEmpty && portfolioData.length > 0 && (
+      {/* Live Events: Finnhub headlines + Gemini cause-effect ( /api/news ) */}
+      {payload && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
         >
-          <NewsRail tickers={portfolioData.map(h => h.ticker)} />
+          <NewsRail tickers={payload.holdings.map((h) => h.ticker)} />
         </motion.div>
       )}
 
@@ -344,7 +371,7 @@ export default function DashboardPage() {
           >
             <Card className="border-primary/30">
               <CardHeader>
-                <CardTitle className="text-lg">Add a Holding</CardTitle>
+                <CardTitle className="text-lg">Add or buy a position</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="mb-4">
@@ -390,16 +417,66 @@ export default function DashboardPage() {
                   </select>
                   <Input
                     type="number"
+                    step="any"
+                    min="0"
                     placeholder="Shares"
                     value={addForm.shares}
-                    onChange={(e) => setAddForm({ ...addForm, shares: e.target.value })}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setAddForm((prev) => {
+                        if (addLiveQuote) {
+                          const sh = parseFloat(v)
+                          if (Number.isFinite(sh) && sh > 0) {
+                            const cost = Math.round(sh * addLiveQuote.price * 100) / 100
+                            return { ...prev, shares: v, cost_basis: cost.toFixed(2) }
+                          }
+                          return { ...prev, shares: v }
+                        }
+                        return { ...prev, shares: v }
+                      })
+                    }}
                   />
                   <Input
                     type="number"
+                    step="any"
+                    min="0"
                     placeholder="Total cost ($)"
                     value={addForm.cost_basis}
-                    onChange={(e) => setAddForm({ ...addForm, cost_basis: e.target.value })}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setAddForm((prev) => {
+                        if (addLiveQuote && addLiveQuote.price > 0) {
+                          const c = parseFloat(v)
+                          if (Number.isFinite(c) && c > 0) {
+                            const sh = Math.round((c / addLiveQuote.price) * 10000) / 10000
+                            return { ...prev, cost_basis: v, shares: String(sh) }
+                          }
+                          return { ...prev, cost_basis: v }
+                        }
+                        return { ...prev, cost_basis: v }
+                      })
+                    }}
                   />
+                </div>
+                <div className="mt-3 text-sm text-muted-foreground space-y-1 min-h-[1.5rem]">
+                  {addQuoteLoading && (
+                    <p className="flex items-center gap-2">
+                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                      Loading live price…
+                    </p>
+                  )}
+                  {!addQuoteLoading && addLiveQuote && (
+                    <p>
+                      Live{" "}
+                      <span className="font-medium text-foreground">{usdDetail.format(addLiveQuote.price)}</span>
+                      {" · "}
+                      as of {addLiveQuote.asOf}. Total cost follows shares × this price (or edit
+                      dollars to set shares).
+                    </p>
+                  )}
+                  {!addQuoteLoading && addForm.ticker.trim() && !addLiveQuote && (
+                    <p>No live quote for this symbol — enter shares and total cost manually.</p>
+                  )}
                 </div>
                 <div className="flex gap-2 mt-4">
                   <Button onClick={handleAddHolding} disabled={adding} className="gap-2">
@@ -655,135 +732,6 @@ export default function DashboardPage() {
                     </motion.div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* LSTM Price Forecast */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-          >
-            <Card className="hover:shadow-lg transition-shadow duration-300">
-              <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-blue-500" />
-                    LSTM 30-Day Price Forecast
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    A 2-layer LSTM neural network predicts the next 30 trading days
-                    for each holding using 5 years of price history.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() => fetchForecast(portfolioData.map((d) => d.ticker))}
-                  disabled={forecastLoading || portfolioData.length === 0}
-                  className="gap-2"
-                >
-                  {forecastLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Activity className="w-4 h-4" />
-                  )}
-                  {Object.keys(forecasts).length > 0 ? "Re-run" : "Run Forecast"}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {forecastError && (
-                  <p className="text-sm text-destructive mb-3">{forecastError}</p>
-                )}
-                {forecastLoading && (
-                  <div className="text-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Training LSTM models... this may take 1-2 minutes per stock.
-                    </p>
-                  </div>
-                )}
-                {!forecastLoading && Object.keys(forecasts).length === 0 && !forecastError && (
-                  <div className="text-center py-8">
-                    <Sparkles className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Click &quot;Run Forecast&quot; to generate LSTM price predictions for your holdings.
-                    </p>
-                  </div>
-                )}
-                {Object.keys(forecasts).length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {Object.entries(forecasts).map(([ticker, f]) => {
-                      if (f.error) {
-                        return (
-                          <div key={ticker} className="rounded-lg border p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-mono font-semibold">{ticker}</span>
-                              <span className="text-xs text-amber-600 dark:text-amber-400">
-                                Error
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">{f.error}</p>
-                          </div>
-                        )
-                      }
-
-                      const isUp = f.predicted_return > 0
-                      const targetPrice =
-                        f.forecast?.length > 0
-                          ? f.forecast[f.forecast.length - 1].price
-                          : 0
-
-                      return (
-                        <div key={ticker} className="rounded-lg border p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <span className="font-mono font-semibold text-foreground">{ticker}</span>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                ${f.current_price?.toFixed(2)} → ${targetPrice.toFixed(2)}
-                              </p>
-                            </div>
-                            <span
-                              className={`text-sm font-semibold ${
-                                isUp
-                                  ? "text-green-600 dark:text-green-400"
-                                  : "text-red-600 dark:text-red-400"
-                              }`}
-                            >
-                              {isUp ? "+" : ""}{f.predicted_return.toFixed(2)}%
-                            </span>
-                          </div>
-                          <div className="h-32">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={f.forecast}>
-                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                <XAxis
-                                  dataKey="date"
-                                  fontSize={10}
-                                  tick={{ fontSize: 10 }}
-                                  tickFormatter={(d) => d.slice(5)}
-                                />
-                                <YAxis fontSize={10} tickFormatter={(v) => `$${v}`} />
-                                <Tooltip
-                                  formatter={(v: number) => [`$${v.toFixed(2)}`, "Price"]}
-                                  labelStyle={{ fontSize: "11px" }}
-                                  contentStyle={{ fontSize: "11px" }}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="price"
-                                  stroke={isUp ? "hsl(142, 71%, 45%)" : "hsl(355, 78%, 56%)"}
-                                  strokeWidth={2}
-                                  dot={false}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
               </CardContent>
             </Card>
           </motion.div>
