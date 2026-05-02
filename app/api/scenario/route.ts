@@ -150,6 +150,9 @@ export async function POST(req: Request) {
           xgbImportanceText: mlData.xgb_importance_text,
           pipeline: mlData.pipeline,
           maxSharpe: opt.max_sharpe,
+          scenarioActualReturnCurrent: opt.scenario_actual_return_current,
+          scenarioActualReturnOptimized: opt.scenario_actual_return_optimized,
+          method: opt.method,
         };
 
         let explanation = "";

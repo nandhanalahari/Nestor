@@ -82,16 +82,11 @@ async def analyze(req: AnalyzeRequest):
         current_weights[h.ticker.upper()] = h.weight / total if total > 0 else 1 / len(tickers)
 
     # ── Step 1: EYES — XGBoost predictions ──
+    # Note: LSTM is intentionally skipped here — it's too slow (~1-2 min per
+    # ticker). Use the /forecast endpoint for LSTM predictions on demand.
     xgb_result = predict_all(tickers)
     predictions = xgb_result["predictions"]
-
-    # ── Step 1b: EYES — LSTM predictions (in parallel concept) ──
-    try:
-        lstm_result = predict_all_lstm(tickers, forecast_days=30)
-        lstm_predictions = lstm_result["predictions"]
-    except Exception as e:
-        lstm_predictions = {}
-        print(f"[LSTM] Failed: {e}")
+    lstm_predictions = {}
 
     # ── Step 2: HANDS — MVO optimization ──
     window = SCENARIO_WINDOWS.get(req.scenario_id, ("", ""))
@@ -103,6 +98,9 @@ async def analyze(req: AnalyzeRequest):
             tickers=tickers,
             current_weights=current_weights,
             xgb_predictions=predictions,
+            window_start=w_start or None,
+            window_end=w_end or None,
+            use_scenario_returns=True,
         )
     except Exception as e:
         raise HTTPException(500, f"Optimization failed: {str(e)}")
@@ -117,7 +115,7 @@ async def analyze(req: AnalyzeRequest):
         "xgb_importance_text": importance_text,
         "scenario_id": req.scenario_id,
         "window": {"start": w_start, "end": w_end},
-        "pipeline": "XGBoost + LSTM (predictors) → PyPortfolioOpt MVO (optimizer) → Gemini (translator)",
+        "pipeline": "XGBoost (predictor) → PyPortfolioOpt MVO with scenario-period data → Gemini (translator). LSTM available via /forecast endpoint.",
     }
 
 

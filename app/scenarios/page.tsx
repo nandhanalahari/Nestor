@@ -100,6 +100,9 @@ interface Recommendation {
   predictions?: Record<string, XGBPrediction>
   lstmPredictions?: Record<string, LSTMPrediction>
   pipeline?: string
+  scenarioActualCurrent?: number
+  scenarioActualOptimized?: number
+  method?: string
 }
 
 const containerVariants = {
@@ -186,6 +189,9 @@ export default function ScenariosPage() {
         predictions: bundle.result.predictions,
         lstmPredictions: bundle.result.lstmPredictions,
         pipeline: bundle.result.pipeline,
+        scenarioActualCurrent: bundle.result.scenarioActualReturnCurrent,
+        scenarioActualOptimized: bundle.result.scenarioActualReturnOptimized,
+        method: bundle.result.method,
       })
     } catch (e) {
       setScenarioError(
@@ -338,14 +344,49 @@ export default function ScenariosPage() {
               transition={{ delay: 0.15 }}
               className="grid grid-cols-2 md:grid-cols-4 gap-4"
             >
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">Risk Reduction</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {recommendation.riskReduction}
-                  </p>
-                </CardContent>
-              </Card>
+              {recommendation.scenarioActualCurrent !== undefined &&
+              recommendation.scenarioActualOptimized !== undefined ? (
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-xs text-muted-foreground">Scenario Return</p>
+                    <p className="text-lg font-bold text-foreground">
+                      <span
+                        className={
+                          recommendation.scenarioActualCurrent >= 0
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }
+                      >
+                        {recommendation.scenarioActualCurrent >= 0 ? "+" : ""}
+                        {recommendation.scenarioActualCurrent.toFixed(1)}%
+                      </span>
+                      <span className="text-muted-foreground"> → </span>
+                      <span
+                        className={
+                          recommendation.scenarioActualOptimized >= 0
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }
+                      >
+                        {recommendation.scenarioActualOptimized >= 0 ? "+" : ""}
+                        {recommendation.scenarioActualOptimized.toFixed(1)}%
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Actual historical performance
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-xs text-muted-foreground">Risk Reduction</p>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {recommendation.riskReduction}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent className="p-4 text-center">
                   <p className="text-xs text-muted-foreground">Sharpe Ratio</p>

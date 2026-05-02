@@ -15,7 +15,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error
 
 from features import engineer_features, FEATURE_COLS, FEATURE_DESCRIPTIONS
-from alpha_vantage import get_monthly_adjusted
+from data_source import get_monthly_prices
 
 
 class AssetPredictor:
@@ -33,8 +33,8 @@ class AssetPredictor:
     def train_and_predict(self) -> dict:
         """Fetch data, engineer features, train XGBoost, predict next period."""
 
-        # Fetch historical monthly data
-        raw = get_monthly_adjusted(self.ticker)
+        # Fetch historical monthly data from Kaggle dataset (or yfinance fallback)
+        raw = get_monthly_prices(self.ticker)
         if len(raw) < 24:
             raise RuntimeError(f"Not enough history for {self.ticker} ({len(raw)} months)")
 

@@ -85,6 +85,9 @@ export type RebalancingResult = {
   lstmPredictions?: Record<string, LSTMPrediction>;
   xgbImportanceText?: string;
   pipeline?: string;
+  scenarioActualReturnCurrent?: number;
+  scenarioActualReturnOptimized?: number;
+  method?: string;
 };
 
 export type Goal = {
