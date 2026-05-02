@@ -22,15 +22,21 @@ export type LessonChoiceOutcome = {
   choice: string;
   /** Portfolio return for this choice over the lesson horizon (% points). */
   finalReturnPct: number;
+  /** Optional 1-2 sentence rationale shown on the reveal card. */
+  rationale?: string;
 };
 
 export type HistoricalLessonProps = {
   lessonTitle?: string;
   lessonSubtitle?: string;
+  /** Optional longer setup paragraph shown on step 1 below the subtitle. */
+  scenarioContext?: string;
   /** Four choice outcomes shown side-by-side on the reveal step. */
   outcomes: LessonChoiceOutcome[];
   /** Choice label with the best `finalReturnPct`. */
   optimalChoice: string;
+  /** Optional summary card shown on the reveal step. */
+  keyTakeaway?: string;
   /**
    * User’s choice when replaying from API results; if omitted, step 3 sets it.
    */
@@ -52,8 +58,10 @@ function returnForChoice(
 export function HistoricalLesson({
   lessonTitle = "Historical lesson",
   lessonSubtitle = "Walk through a real market moment with your portfolio.",
+  scenarioContext,
   outcomes,
   optimalChoice,
+  keyTakeaway,
   userChoice: userChoiceProp,
   className,
 }: HistoricalLessonProps) {
@@ -134,46 +142,53 @@ export function HistoricalLesson({
   const canAdvanceStep3 = Boolean(pickedChoice);
 
   return (
-    <div className={cn("mx-auto max-w-5xl space-y-8", className)}>
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <BookOpen className="size-4 shrink-0" />
+    <div className={cn("mx-auto max-w-6xl space-y-8 font-[Inter] text-[#002141]", className)}>
+      <div className="flex items-center gap-2 text-sm font-medium text-[#3f5165]">
+        <BookOpen className="size-4 shrink-0 text-[#7aa0d6]" />
         <span>
           Step {step} of 4 — {lessonTitle}
         </span>
       </div>
 
       {step === 1 && (
-        <Card>
+        <Card className="border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <CardHeader>
-            <CardTitle>{lessonTitle}</CardTitle>
-            <CardDescription>{lessonSubtitle}</CardDescription>
+            <CardTitle className="font-[Manrope] text-[#002141]">{lessonTitle}</CardTitle>
+            <CardDescription className="text-[#3f5165]">{lessonSubtitle}</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-end">
-            <Button onClick={() => setStep(2)} className="gap-2">
-              Continue <ArrowRight className="size-4" />
-            </Button>
+          <CardContent className="space-y-4">
+            {scenarioContext ? (
+              <p className="rounded-md border border-[#e0e0e0] bg-[#f9f9fe] p-4 text-sm leading-6 text-[#002141]">
+                {scenarioContext}
+              </p>
+            ) : null}
+            <div className="flex justify-end">
+              <Button onClick={() => setStep(2)} className="gap-2 bg-[#002141] text-white hover:bg-[#003666]">
+                Continue <ArrowRight className="size-4" />
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
       {step === 2 && (
-        <Card>
+        <Card className="border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <LineChart className="size-5 text-primary" />
+            <CardTitle className="flex items-center gap-2 font-[Manrope] text-[#002141]">
+              <LineChart className="size-5 text-[#003666]" />
               Your portfolio at the lesson date
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[#3f5165]">
               {portfolioLoading
                 ? "Loading portfolio…"
                 : `Approximate portfolio value today: ${usdDetail.format(portfolioValue)}.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setStep(1)}>
+            <Button variant="outline" onClick={() => setStep(1)} className="border-[#d7dce5] bg-white text-[#002141] hover:bg-[#eef4fb]">
               Back
             </Button>
-            <Button onClick={() => setStep(3)} className="gap-2">
+            <Button onClick={() => setStep(3)} className="gap-2 bg-[#002141] text-white hover:bg-[#003666]">
               Make a choice <ArrowRight className="size-4" />
             </Button>
           </CardContent>
@@ -181,10 +196,10 @@ export function HistoricalLesson({
       )}
 
       {step === 3 && (
-        <Card>
+        <Card className="border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <CardHeader>
-            <CardTitle>What would you have done?</CardTitle>
-            <CardDescription>
+            <CardTitle className="font-[Manrope] text-[#002141]">What would you have done?</CardTitle>
+            <CardDescription className="text-[#3f5165]">
               Pick the move that feels closest to your instinct — you’ll see
               outcomes next.
             </CardDescription>
@@ -197,7 +212,12 @@ export function HistoricalLesson({
                   variant={
                     pickedChoice === o.choice ? "default" : "outline"
                   }
-                  className="h-auto min-h-11 justify-start whitespace-normal px-4 py-3 text-left text-sm"
+                  className={cn(
+                    "h-auto min-h-11 justify-start whitespace-normal px-4 py-3 text-left text-sm",
+                    pickedChoice === o.choice
+                      ? "bg-[#002141] text-white hover:bg-[#003666]"
+                      : "border-[#d7dce5] bg-white text-[#002141] hover:bg-[#eef4fb] hover:text-[#003666]",
+                  )}
                   onClick={() => setPickedChoice(o.choice)}
                 >
                   {o.choice}
@@ -205,13 +225,13 @@ export function HistoricalLesson({
               ))}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setStep(2)}>
+              <Button variant="outline" onClick={() => setStep(2)} className="border-[#d7dce5] bg-white text-[#002141] hover:bg-[#eef4fb]">
                 Back
               </Button>
               <Button
                 disabled={!canAdvanceStep3}
                 onClick={() => setStep(4)}
-                className="gap-2"
+                className="gap-2 bg-[#002141] text-white hover:bg-[#003666]"
               >
                 See reveal <ArrowRight className="size-4" />
               </Button>
@@ -228,10 +248,10 @@ export function HistoricalLesson({
           className="space-y-8"
         >
           <div>
-            <h3 className="text-lg font-semibold text-foreground">
+            <h3 className="font-[Manrope] text-lg font-semibold text-[#002141]">
               Outcomes by choice
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-[#3f5165]">
               Side-by-side returns over the lesson horizon (hypothetical).
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -244,23 +264,23 @@ export function HistoricalLesson({
                   <Card
                     key={o.choice}
                     className={cn(
-                      "border transition-colors",
+                      "border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)] transition-colors",
                       isOptimal &&
-                        "border-primary ring-1 ring-primary/30 bg-primary/5",
-                      isUser && !isOptimal && "border-amber-500/50 bg-amber-500/5",
+                        "border-[#003666] bg-[#eef4fb] ring-1 ring-[#7aa0d6]",
+                      isUser && !isOptimal && "border-[#f7e382] bg-[#fffbe8]",
                     )}
                   >
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium leading-snug">
+                      <CardTitle className="font-[Manrope] text-sm font-semibold leading-snug text-[#002141]">
                         {o.choice}
                       </CardTitle>
                       {isOptimal ? (
-                        <span className="text-xs font-semibold text-primary">
+                        <span className="text-xs font-semibold text-[#003666]">
                           Optimal
                         </span>
                       ) : null}
                       {isUser ? (
-                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                        <span className="text-xs font-semibold text-[#8b6f00]">
                           Your pick
                         </span>
                       ) : null}
@@ -276,9 +296,14 @@ export function HistoricalLesson({
                       >
                         {formatPercent(o.finalReturnPct)}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-[#3f5165]">
                         Hypothetical return
                       </p>
+                      {o.rationale ? (
+                        <p className="mt-3 border-t border-[#e0e0e0] pt-3 text-xs leading-5 text-[#3f5165]">
+                          {o.rationale}
+                        </p>
+                      ) : null}
                     </CardContent>
                   </Card>
                 );
@@ -286,16 +311,29 @@ export function HistoricalLesson({
             </div>
           </div>
 
+          {keyTakeaway ? (
+            <Card className="border-[#7aa0d6] bg-[#eef4fb] shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="font-[Manrope] text-base text-[#002141]">
+                  Key takeaway
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm leading-6 text-[#002141]">
+                {keyTakeaway}
+              </CardContent>
+            </Card>
+          ) : null}
+
           {/* Your Instinct Score */}
           {instinct && (
-            <Card className="border-primary/25 bg-muted/30">
+            <Card className="border-[#f7e382] bg-[#fffbe8] shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Sparkles className="size-4 text-primary" />
+                <CardTitle className="flex items-center gap-2 font-[Manrope] text-base text-[#002141]">
+                  <Sparkles className="size-4 text-[#8b6f00]" />
                   Your Instinct Score
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm leading-relaxed text-foreground">
+              <CardContent className="space-y-2 text-sm leading-relaxed text-[#002141]">
                 {instinct.matchedOptimal ? (
                   <p className="font-medium text-green-700 dark:text-green-400">
                     Perfect call — you matched the optimal strategy. +50 XP
@@ -304,7 +342,7 @@ export function HistoricalLesson({
                   <p>
                     Close call. You were{" "}
                     <span className="font-semibold tabular-nums">
-                      {formatPercent(Math.abs(gapDisplay))}
+                      {formatPercent(Math.abs(gapDisplay ?? 0))}
                     </span>{" "}
                     off the optimal.
                   </p>
@@ -312,7 +350,7 @@ export function HistoricalLesson({
                   <p>
                     Your choice cost you{" "}
                     <span className="font-semibold tabular-nums">
-                      {formatPercent(gapDisplay)}
+                      {formatPercent(gapDisplay ?? 0)}
                     </span>{" "}
                     vs. the best move. On your actual portfolio size of{" "}
                     <span className="font-semibold">
@@ -336,10 +374,10 @@ export function HistoricalLesson({
           )}
 
           <div className="flex flex-wrap justify-between gap-2">
-            <Button variant="outline" onClick={() => setStep(3)}>
+            <Button variant="outline" onClick={() => setStep(3)} className="border-[#d7dce5] bg-white text-[#002141] hover:bg-[#eef4fb]">
               Back to choice
             </Button>
-            <Button variant="outline" onClick={() => setStep(1)}>
+            <Button variant="outline" onClick={() => setStep(1)} className="border-[#d7dce5] bg-white text-[#002141] hover:bg-[#eef4fb]">
               Start over
             </Button>
           </div>
