@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { runScenario } from "@/lib/scenario";
 import { explainRebalancing } from "@/lib/gemini";
 import { calculateTaxPreview } from "@/lib/tax";
+import { estimateTradeFees } from "@/lib/fees";
+import { CURATED_ASSETS } from "@/lib/curatedAssets";
 import { getLiveQuotes } from "@/lib/yahooFinance";
 import { isMockDataEnabled, mockGoals, mockHoldings, mockQuotes, MOCK_USER_ID } from "@/lib/mockData";
 import type { Holding, ScenarioId } from "@/lib/types";
@@ -127,6 +129,47 @@ async function buildTaxPreview(
 
   const preview = calculateTaxPreview(lots);
   return preview.lines.length > 0 ? preview : undefined;
+}
+
+function buildFeeEstimate(
+  dbHoldings: DbHolding[] | undefined,
+  originalAllocation: Record<string, number>,
+  newAllocation: Record<string, number>,
+) {
+  if (!dbHoldings || dbHoldings.length === 0) return undefined;
+
+  const totalValue = dbHoldings.reduce(
+    (sum, holding) => sum + Math.max(0, Number(holding.cost_basis) || 0),
+    0,
+  );
+  if (totalValue <= 0) return undefined;
+
+  const holdingByTicker = new Map(
+    dbHoldings.map((holding) => [holding.ticker.toUpperCase(), holding]),
+  );
+  const curatedByTicker = new Map(
+    CURATED_ASSETS.map((asset) => [asset.ticker.toUpperCase(), asset]),
+  );
+  const tickers = new Set([
+    ...Object.keys(originalAllocation),
+    ...Object.keys(newAllocation),
+  ]);
+
+  const trades = Array.from(tickers).map((ticker) => {
+    const currentPct = allocationPercent(Number(originalAllocation[ticker]) || 0);
+    const targetPct = allocationPercent(Number(newAllocation[ticker]) || 0);
+    const category =
+      holdingByTicker.get(ticker.toUpperCase())?.category ??
+      curatedByTicker.get(ticker.toUpperCase())?.category;
+
+    return {
+      ticker,
+      category,
+      tradedValue: totalValue * ((targetPct - currentPct) / 100),
+    };
+  });
+
+  return estimateTradeFees(trades);
 }
 
 export async function POST(req: Request) {
@@ -266,7 +309,15 @@ export async function POST(req: Request) {
           windowEnd: mlData.window?.end || "",
           originalAllocation: opt.current.weights,
           newAllocation: opt.min_volatility.weights,
-          expectedRiskReduction: `${Math.max(0, opt.current.volatility - opt.min_volatility.volatility).toFixed(1)} pts`,
+          expectedRiskReduction:
+            opt.current.volatility > 0
+              ? `${Math.max(
+                  0,
+                  ((opt.current.volatility - opt.min_volatility.volatility) /
+                    opt.current.volatility) *
+                    100,
+                ).toFixed(0)}%`
+              : "0%",
           originalScenarioReturnPct: opt.current.expected_return,
           newScenarioReturnPct: opt.min_volatility.expected_return,
           originalVolPct: opt.current.volatility,
@@ -298,6 +349,11 @@ export async function POST(req: Request) {
           method: opt.method,
         };
         const taxPreview = await buildTaxPreview(
+          dbHoldingsForTax,
+          result.originalAllocation,
+          result.newAllocation,
+        );
+        const feeEstimate = buildFeeEstimate(
           dbHoldingsForTax,
           result.originalAllocation,
           result.newAllocation,
@@ -355,6 +411,7 @@ export async function POST(req: Request) {
           source: "xgboost-mvo",
           warnings: [],
           tax_preview: taxPreview ?? null,
+          fee_estimate: feeEstimate ?? null,
         });
       }
     } catch {
@@ -366,6 +423,11 @@ export async function POST(req: Request) {
   try {
     const bundle = await runScenario(body.scenarioId, holdings);
     const taxPreview = await buildTaxPreview(
+      dbHoldingsForTax,
+      bundle.result.originalAllocation,
+      bundle.result.newAllocation,
+    );
+    const feeEstimate = buildFeeEstimate(
       dbHoldingsForTax,
       bundle.result.originalAllocation,
       bundle.result.newAllocation,
@@ -428,6 +490,7 @@ export async function POST(req: Request) {
       ...bundle,
       explanation,
       tax_preview: taxPreview ?? null,
+      fee_estimate: feeEstimate ?? null,
     });
   } catch (error) {
     return NextResponse.json(

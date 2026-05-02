@@ -65,6 +65,13 @@ const itemVariants: Variants = {
   },
 }
 
+const panelClass =
+  "border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const insightPanelClass =
+  "border-[#e0e0e0] border-l-4 border-l-[#f7e382] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const headingClass = "font-display text-3xl font-semibold text-[#002141]"
+const subcopyClass = "mt-2 max-w-3xl text-sm leading-6 text-[#43474f]"
+
 export default function GoalsPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -171,13 +178,13 @@ export default function GoalsPage() {
   if (authLoading || (!user && !authLoading)) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 bg-[#f9f9fe] text-[#1a1c1f]">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -185,13 +192,13 @@ export default function GoalsPage() {
         className="flex items-start justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground">My Goals</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className={headingClass}>My Goals</h1>
+          <p className={subcopyClass}>
             Set financial goals and get AI-powered guidance from Gemini.
           </p>
         </div>
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button onClick={() => setIsAdding(true)} className="gap-2">
+          <Button onClick={() => setIsAdding(true)} className="gap-2 bg-[#002141] hover:bg-[#003666]">
             <Plus className="w-4 h-4" />
             Add Goal
           </Button>
@@ -206,10 +213,10 @@ export default function GoalsPage() {
             exit={{ opacity: 0, height: 0, y: -20 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="border-primary/30">
+            <Card className={insightPanelClass}>
               <CardHeader>
-                <CardTitle>Create a New Goal</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-[#002141]">Create a New Goal</CardTitle>
+                <CardDescription className="text-[#43474f]">
                   Tell us what you&apos;re saving for and Gemini will help you get there.
                 </CardDescription>
               </CardHeader>
@@ -241,7 +248,7 @@ export default function GoalsPage() {
                   <select
                     value={newGoal.icon}
                     onChange={(e) => setNewGoal({ ...newGoal, icon: e.target.value })}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="rounded-md border border-[#e0e0e0] bg-white px-3 py-2 text-sm text-[#1a1c1f] outline-none focus:border-[#003666] focus:ring-2 focus:ring-[#7aa0d6]/30"
                   >
                     <option value="home">Home</option>
                     <option value="education">Education</option>
@@ -252,13 +259,13 @@ export default function GoalsPage() {
                 </div>
                 <div className="flex gap-2 mt-4">
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button onClick={handleAddGoal} disabled={isSaving} className="gap-2">
+                    <Button onClick={handleAddGoal} disabled={isSaving} className="gap-2 bg-[#002141] hover:bg-[#003666]">
                       {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       {isSaving ? "Saving..." : "Save Goal"}
                     </Button>
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button variant="outline" onClick={() => setIsAdding(false)} className="gap-2">
+                    <Button variant="outline" onClick={() => setIsAdding(false)} className="gap-2 border-[#e0e0e0] bg-white text-[#002141] hover:bg-[#f9f9fe]">
                       <X className="w-4 h-4" />
                       Cancel
                     </Button>
@@ -267,7 +274,7 @@ export default function GoalsPage() {
               </CardContent>
             </Card>
             {saveNotice && (
-              <p className="mt-3 text-sm text-muted-foreground">{saveNotice}</p>
+              <p className="mt-3 text-sm text-[#43474f]">{saveNotice}</p>
             )}
           </motion.div>
         )}
@@ -275,7 +282,7 @@ export default function GoalsPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
         </div>
       ) : (
         <motion.div
@@ -302,7 +309,7 @@ export default function GoalsPage() {
                     whileHover={{ y: -4 }}
                     transition={{ type: "spring", stiffness: 300 }}
                   >
-                    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+                    <Card className={`${panelClass} overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_20px_rgba(0,0,0,0.06)]`}>
                       <CardContent className="p-6">
                         <div className="flex items-start gap-6">
                           <motion.div
@@ -313,18 +320,18 @@ export default function GoalsPage() {
                               stiffness: 200,
                               delay: 0.2 + index * 0.1,
                             }}
-                            className="p-4 rounded-xl bg-primary/10"
+                            className="rounded-xl bg-[#7aa0d6]/20 p-4"
                           >
-                            <Icon className="w-8 h-8 text-primary" />
+                            <Icon className="h-8 w-8 text-[#003666]" />
                           </motion.div>
 
                           <div className="flex-1 space-y-4">
                             <div className="flex items-start justify-between">
                               <div>
-                                <h3 className="text-xl font-semibold text-foreground">
+                                <h3 className="font-display text-xl font-semibold text-[#002141]">
                                   {goal.title}
                                 </h3>
-                                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                <div className="mt-1 flex items-center gap-4 text-sm text-[#43474f]">
                                   {goal.deadline && (
                                     <span className="flex items-center gap-1">
                                       <Calendar className="w-4 h-4" />
@@ -339,16 +346,16 @@ export default function GoalsPage() {
                               </div>
                               <div className="text-right flex items-start gap-2">
                                 <div>
-                                  <p className="text-2xl font-bold text-foreground">
+                                  <p className="text-2xl font-semibold text-[#002141]">
                                     ${current.toLocaleString()}
                                   </p>
-                                  <p className="text-sm text-muted-foreground">
+                                  <p className="text-sm text-[#43474f]">
                                     of ${target.toLocaleString()}
                                   </p>
                                 </div>
                                 <button
                                   onClick={() => handleDeleteGoal(goal.id)}
-                                  className="text-muted-foreground hover:text-destructive transition-colors p-1 mt-1"
+                                  className="mt-1 p-1 text-[#43474f] transition-colors hover:text-[#8a1f1f]"
                                   title="Delete goal"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -356,9 +363,9 @@ export default function GoalsPage() {
                               </div>
                             </div>
 
-                            <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                            <div className="h-3 overflow-hidden rounded-full bg-[#eeedf2]">
                               <motion.div
-                                className="h-full bg-primary rounded-full"
+                                className="h-full rounded-full bg-[#003666]"
                                 initial={{ width: 0 }}
                                 animate={{ width: `${progress}%` }}
                                 transition={{
@@ -380,10 +387,10 @@ export default function GoalsPage() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.4, delay: 0.5 + index * 0.1 }}
-                                className="flex items-start gap-3 p-4 bg-accent rounded-lg mt-4"
+                                className="mt-4 flex items-start gap-3 rounded-lg border border-[#e0e0e0] border-l-4 border-l-[#f7e382] bg-[#f9f9fe] p-4"
                               >
-                                <Sparkles className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                                <p className="text-sm text-foreground">
+                                <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#8a5d00]" />
+                                <p className="text-sm text-[#1a1c1f]">
                                   {goal.ai_suggestion}
                                 </p>
                               </motion.div>
@@ -406,17 +413,17 @@ export default function GoalsPage() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <Card>
+          <Card className={panelClass}>
             <CardContent className="p-12 text-center">
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
               >
-                <Target className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <Target className="mx-auto mb-4 h-12 w-12 text-[#7aa0d6]" />
               </motion.div>
-              <h3 className="text-lg font-semibold text-foreground">No goals yet</h3>
-              <p className="text-muted-foreground mt-1">
+              <h3 className="font-display text-lg font-semibold text-[#002141]">No goals yet</h3>
+              <p className="mt-1 text-[#43474f]">
                 Click &quot;Add Goal&quot; to set your first financial goal. Gemini AI will provide personalized guidance.
               </p>
             </CardContent>

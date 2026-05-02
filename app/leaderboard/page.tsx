@@ -28,31 +28,32 @@ export default function LeaderboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-primary" />
+      <div className="-mx-4 -my-8 flex min-h-screen items-center justify-center bg-[#f9f9fe] md:-mx-8">
+        <Loader2 className="size-8 animate-spin text-[#003666]" />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      <div className="-mx-4 -my-8 flex min-h-screen items-center justify-center bg-[#f9f9fe] md:-mx-8">
+        <Loader2 className="size-8 animate-spin text-[#3f5165]" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 pb-8">
-      <div className="flex items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-xl bg-primary/15 text-primary">
+    <div className="-mx-4 -my-8 min-h-screen bg-[#f9f9fe] px-4 py-10 font-[Inter] text-[#002141] md:-mx-8 md:px-8">
+      <div className="mx-auto max-w-6xl space-y-8 pb-8">
+      <div className="flex items-center gap-3 rounded-lg border border-[#e0e0e0] bg-white p-6 shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+        <div className="flex size-11 items-center justify-center rounded-lg bg-[#f7e382] text-[#002141]">
           <Trophy className="size-6" aria-hidden />
         </div>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="font-[Manrope] text-3xl font-bold tracking-tight text-[#002141]">
             Leaderboard
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-[#3f5165]">
             Compare XP with other Nestor investors.
           </p>
         </div>
@@ -60,7 +61,7 @@ export default function LeaderboardPage() {
 
       <div className="relative max-w-xl">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#7aa0d6]"
           aria-hidden
         />
         <Input
@@ -68,15 +69,19 @@ export default function LeaderboardPage() {
           placeholder="Search players by name…"
           value={searchRaw}
           onChange={(e) => setSearchRaw(e.target.value)}
-          className="h-10 pl-9"
+          className="h-11 border-[#d7dce5] bg-white pl-9 text-[#002141] shadow-[0_20px_20px_rgba(0,0,0,0.04)] placeholder:text-[#7a8797] focus-visible:ring-[#7aa0d6]"
           aria-label="Filter leaderboard by display name"
         />
       </div>
 
       <Tabs defaultValue="alltime" className="w-full gap-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="alltime">All Time</TabsTrigger>
-          <TabsTrigger value="weekly">This Week</TabsTrigger>
+        <TabsList className="grid w-full max-w-md grid-cols-2 border border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+          <TabsTrigger value="alltime" className="data-[state=active]:bg-[#002141] data-[state=active]:text-white">
+            All Time
+          </TabsTrigger>
+          <TabsTrigger value="weekly" className="data-[state=active]:bg-[#002141] data-[state=active]:text-white">
+            This Week
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="alltime" className="mt-0">
           <LeaderboardTable mode="alltime" searchQuery={debouncedSearch} />
@@ -85,6 +90,7 @@ export default function LeaderboardPage() {
           <LeaderboardTable mode="weekly" searchQuery={debouncedSearch} />
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

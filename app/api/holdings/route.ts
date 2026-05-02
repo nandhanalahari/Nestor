@@ -103,3 +103,60 @@ export async function DELETE(req: Request) {
 
   return NextResponse.json({ deleted: true });
 }
+
+export async function PATCH(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const supabase = getSupabase(token);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser(token);
+  if (!user) {
+    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+  }
+
+  let body: {
+    id?: string;
+    ticker?: string;
+    name?: string;
+    category?: string;
+    shares?: number;
+    cost_basis?: number;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (!body.id || !body.ticker || !body.name) {
+    return NextResponse.json(
+      { error: "id, ticker and name are required" },
+      { status: 400 },
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("holdings")
+    .update({
+      ticker: body.ticker.toUpperCase(),
+      name: body.name,
+      category: body.category || "Stock",
+      shares: body.shares ?? 0,
+      cost_basis: body.cost_basis ?? 0,
+    })
+    .eq("id", body.id)
+    .eq("user_id", user.id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ holding: data });
+}

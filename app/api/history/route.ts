@@ -84,7 +84,7 @@ export async function POST(req: Request) {
   let totalPortfolioValue = 0;
 
   const holdingPrices = dbHoldings.map(
-    (h: { ticker: string; shares: number; cost_basis: number }) => {
+    (h: { ticker: string; name?: string; shares: number; cost_basis: number }) => {
       const live = liveQuotes.find((q) => q.ticker === h.ticker);
       const price = live ? live.price : 0;
       const shares = Number(h.shares) || 0;
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
   const rows = holdingPrices.map(
     (h: {
       ticker: string;
-      name: string;
+      name?: string;
       shares: number;
       cost_basis: number;
       price: number;

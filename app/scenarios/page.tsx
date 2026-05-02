@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import type { Variants } from "framer-motion"
 import {
   Card,
   CardContent,
@@ -11,19 +11,17 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Term } from "@/components/Term"
 import {
-  TrendingDown,
-  TrendingUp,
   AlertTriangle,
   DollarSign,
   Zap,
   RefreshCw,
-  ChevronRight,
   Shield,
   ArrowRight,
   Activity,
-  BarChart3,
+  TrendingUp,
 } from "lucide-react"
 import {
   BarChart,
@@ -33,51 +31,13 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-  ZAxis,
   LineChart,
   Line,
 } from "recharts"
 import type { RebalancingResult, ScenarioId, FrontierPoint, XGBPrediction, LSTMPrediction } from "@/lib/types"
 import type { TaxPreview as TaxPreviewData } from "@/lib/tax"
+import type { FeeEstimate } from "@/lib/fees"
 import { authFetch } from "@/lib/api"
-import { TaxPreview } from "@/components/TaxPreview"
-
-const scenarioCards = [
-  {
-    id: "market-crash",
-    title: "Market Crash",
-    description: "What if stocks crash like 2020?",
-    icon: TrendingDown,
-    color: "text-red-500",
-    bgColor: "bg-red-50 dark:bg-red-900/20",
-  },
-  {
-    id: "inflation",
-    title: "Inflation Spike",
-    description: "What if inflation rises to 8%+?",
-    icon: TrendingUp,
-    color: "text-orange-500",
-    bgColor: "bg-orange-50 dark:bg-orange-900/20",
-  },
-  {
-    id: "recession",
-    title: "Recession",
-    description: "What if we enter a deep recession?",
-    icon: DollarSign,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-  },
-  {
-    id: "tech-boom",
-    title: "Tech Boom",
-    description: "What if tech surges like 2023-24?",
-    icon: Zap,
-    color: "text-foreground",
-    bgColor: "bg-accent",
-  },
-]
 
 const uiToApi: Record<string, ScenarioId> = {
   "market-crash": "market-drop",
@@ -86,12 +46,26 @@ const uiToApi: Record<string, ScenarioId> = {
   "tech-boom": "tech-boom",
 }
 
+const apiToUi: Record<ScenarioId, string> = {
+  "market-drop": "market-crash",
+  "inflation-spike": "inflation",
+  recession: "recession",
+  "tech-boom": "tech-boom",
+}
+
+const promptExamples = [
+  "What if stocks fall 20% next month?",
+  "What if inflation spikes again?",
+  "What if the economy enters a recession?",
+  "What if AI and tech stocks keep booming?",
+  "I need to withdraw 20% next year.",
+]
+
 interface Recommendation {
   original: Record<string, number>
   recommended: Record<string, number>
   riskReduction: string
   explanation: string
-  meta?: string
   originalVol?: number
   newVol?: number
   originalSharpe?: number
@@ -108,20 +82,227 @@ interface Recommendation {
   scenarioActualOptimized?: number
   method?: string
   taxPreview?: TaxPreviewData
+  feeEstimate?: FeeEstimate
 }
 
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+type ScenarioChatCitation = {
+  label: string
+  value: string
+  detail: string
 }
 
-const itemVariants: Variants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { type: "spring", stiffness: 100, damping: 12 },
-  },
+type ScenarioChatResponse = {
+  answer: string
+  scenarioId: ScenarioId | null
+  citations: ScenarioChatCitation[]
+  suggestedPromptExamples?: string[]
+  unsupported: boolean
+}
+
+type ExecuteResponse = {
+  executed: boolean
+  mock?: boolean
+  totalValue?: number
+  trades?: Array<{
+    ticker: string
+    action: "buy" | "sell" | "hold"
+    dollarChange: number
+    sharesChange: number
+    price: number
+  }>
+  feeEstimate?: FeeEstimate
+  warnings?: string[]
+  error?: string
+}
+
+const panelClass =
+  "border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const insightPanelClass =
+  "border-[#e0e0e0] border-l-4 border-l-[#f7e382] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const headingClass = "font-display text-3xl font-semibold text-[#002141]"
+const subcopyClass = "mt-2 max-w-4xl text-sm leading-6 text-[#43474f]"
+const metricLabelClass = "text-xs font-medium uppercase text-[#43474f]"
+
+const currency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+})
+
+const currencyWithCents = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+})
+
+function formatAllocationPct(value: number) {
+  return `${Math.round(value)}%`
+}
+
+function SimpleRebalanceCard({
+  original,
+  recommended,
+}: {
+  original: Record<string, number>
+  recommended: Record<string, number>
+}) {
+  const rows = Object.keys({ ...original, ...recommended })
+    .map((ticker) => {
+      const current = original[ticker] ?? 0
+      const target = recommended[ticker] ?? 0
+      return {
+        ticker,
+        current,
+        target,
+        change: target - current,
+      }
+    })
+    .filter((row) => Math.abs(row.change) >= 0.5 || row.current > 0 || row.target > 0)
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+
+  return (
+    <Card className={insightPanelClass}>
+      <CardHeader>
+        <CardTitle className="text-lg text-[#002141]">Suggested change</CardTitle>
+        <CardDescription className="text-[#43474f]">
+          One simple view of what would move if you execute this rebalance.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {rows.map((row) => {
+            const isIncrease = row.change > 0
+            const isFlat = Math.abs(row.change) < 0.5
+
+            return (
+              <div
+                key={row.ticker}
+                className="flex flex-col gap-3 rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p className="font-mono text-sm font-semibold text-[#002141]">
+                    {row.ticker}
+                  </p>
+                  <p className="mt-1 text-xs text-[#43474f]">
+                    {formatAllocationPct(row.current)} now to {formatAllocationPct(row.target)} suggested
+                  </p>
+                </div>
+                <div
+                  className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ${
+                    isFlat
+                      ? "bg-white text-[#43474f]"
+                      : isIncrease
+                        ? "bg-[#e6f4ef] text-[#00735f]"
+                        : "bg-[#fff4d6] text-[#8a5d00]"
+                  }`}
+                >
+                  {isFlat
+                    ? "Hold steady"
+                    : `${isIncrease ? "Add" : "Trim"} ${formatAllocationPct(Math.abs(row.change))}`}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function CostsAndTaxesCard({
+  feeEstimate,
+  taxPreview,
+}: {
+  feeEstimate?: FeeEstimate | null
+  taxPreview?: TaxPreviewData | null
+}) {
+  if ((!feeEstimate || feeEstimate.totalTradedValue <= 0) && !taxPreview) return null
+
+  const shortTermGain =
+    taxPreview?.lines
+      .filter((line) => line.holdingPeriod === "short-term")
+      .reduce((sum, line) => sum + line.realizedGain, 0) ?? 0
+  const longTermGain =
+    taxPreview?.lines
+      .filter((line) => line.holdingPeriod === "long-term")
+      .reduce((sum, line) => sum + line.realizedGain, 0) ?? 0
+
+  return (
+    <Card className={panelClass}>
+      <CardHeader>
+        <CardTitle className="text-lg text-[#002141]">Costs and taxes</CardTitle>
+        <CardDescription className="text-[#43474f]">
+          A simple estimate before you execute. This is not tax or brokerage advice.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#524700]">
+              Fees
+            </p>
+            {feeEstimate && feeEstimate.totalTradedValue > 0 ? (
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-[#43474f]">Amount traded</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#002141]">
+                    {currencyWithCents.format(feeEstimate.totalTradedValue)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#43474f]">Estimated cost</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#00735f]">
+                    {currencyWithCents.format(feeEstimate.totalCost)}
+                  </p>
+                </div>
+                <p className="col-span-2 text-xs leading-5 text-[#43474f]">
+                  Assumes $0 commission and 0.05% spread/slippage for stocks and ETFs.
+                  Mutual funds use 0% spread/slippage in this demo.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-[#43474f]">
+                No meaningful trading cost estimate is available for this proposal.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#524700]">
+              Taxes
+            </p>
+            {taxPreview && taxPreview.lines.length > 0 ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-[#43474f]">Realized gain/loss</p>
+                    <p className="mt-1 text-2xl font-semibold text-[#002141]">
+                      {currency.format(taxPreview.totalRealizedGain)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#43474f]">Estimated tax</p>
+                    <p className="mt-1 text-2xl font-semibold text-[#8a5d00]">
+                      {currency.format(taxPreview.estimatedFederalTax)}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs leading-5 text-[#43474f]">
+                  Short-term gain: {currency.format(shortTermGain)}. Long-term gain:{" "}
+                  {currency.format(longTermGain)}. Actual taxes depend on your filing status,
+                  bracket, state, and other gains or losses.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-[#43474f]">
+                No taxable sales were estimated for this proposal.
+              </p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 type ScenarioBundle = {
@@ -136,22 +317,30 @@ type ScenarioBundle = {
   source: "live" | "fallback" | "xgboost-mvo"
   warnings: string[]
   tax_preview?: TaxPreviewData | null
+  fee_estimate?: FeeEstimate | null
 }
 
 export default function ScenariosPage() {
+  const router = useRouter()
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [scenarioError, setScenarioError] = useState<string | null>(null)
+  const [advancedMode, setAdvancedMode] = useState(false)
+  const [chatPrompt, setChatPrompt] = useState("")
+  const [chatAnswer, setChatAnswer] = useState<string | null>(null)
+  const [chatLoading, setChatLoading] = useState(false)
+  const [executeLoading, setExecuteLoading] = useState(false)
+  const [executeMessage, setExecuteMessage] = useState<string | null>(null)
+  const [executeError, setExecuteError] = useState<string | null>(null)
 
-  const handleScenarioSelect = async (id: string) => {
-    const apiId = uiToApi[id]
-    if (!apiId) return
-
+  const runScenarioAnalysis = async (apiId: ScenarioId, uiId: string) => {
     setIsLoading(true)
-    setSelectedScenario(id)
+    setSelectedScenario(uiId)
     setRecommendation(null)
     setScenarioError(null)
+    setExecuteMessage(null)
+    setExecuteError(null)
 
     try {
       const res = await authFetch("/api/scenario", {
@@ -165,24 +354,11 @@ export default function ScenariosPage() {
         bundle.explanation ||
         "The optimizer studied how your holdings have moved together and found a portfolio mix that may be less bumpy."
 
-      const sourceLabel =
-        bundle.source === "xgboost-mvo"
-          ? "AI forecast + portfolio optimizer"
-          : bundle.source === "live"
-            ? "Live market data + portfolio optimizer"
-            : "Calibrated fallback"
-
-      const metaParts = [
-        sourceLabel,
-        ...(bundle.warnings ?? []),
-      ]
-
       setRecommendation({
         original: bundle.result.originalAllocation,
         recommended: bundle.result.newAllocation,
         riskReduction: bundle.result.expectedRiskReduction,
         explanation,
-        meta: metaParts.filter(Boolean).join(" · "),
         originalVol: bundle.result.originalVolPct,
         newVol: bundle.result.newVolPct,
         originalSharpe: bundle.result.originalSharpe,
@@ -199,6 +375,7 @@ export default function ScenariosPage() {
         scenarioActualOptimized: bundle.result.scenarioActualReturnOptimized,
         method: bundle.result.method,
         taxPreview: bundle.tax_preview ?? undefined,
+        feeEstimate: bundle.fee_estimate ?? undefined,
       })
     } catch (e) {
       setScenarioError(
@@ -210,16 +387,77 @@ export default function ScenariosPage() {
     }
   }
 
-  const comparisonData = recommendation
-    ? Object.keys({
-        ...recommendation.original,
-        ...recommendation.recommended,
-      }).map((ticker) => ({
-        ticker,
-        current: Math.round(recommendation.original[ticker] ?? 0),
-        recommended: Math.round(recommendation.recommended[ticker] ?? 0),
-      }))
-    : []
+  const handleChatSubmit = async (promptOverride?: string) => {
+    const prompt = (promptOverride ?? chatPrompt).trim()
+    if (!prompt) return
+
+    setChatPrompt(prompt)
+    setChatLoading(true)
+    setScenarioError(null)
+    setChatAnswer(null)
+    setExecuteMessage(null)
+    setExecuteError(null)
+
+    try {
+      const res = await authFetch("/api/scenario/chat", {
+        method: "POST",
+        body: JSON.stringify({ prompt }),
+      })
+      const data = (await res.json()) as ScenarioChatResponse & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Scenario chat failed.")
+
+      setChatAnswer(data.answer)
+
+      if (data.unsupported || !data.scenarioId) {
+        setRecommendation(null)
+        setSelectedScenario(null)
+        return
+      }
+
+      await runScenarioAnalysis(data.scenarioId, apiToUi[data.scenarioId])
+    } catch (e) {
+      setScenarioError(
+        e instanceof Error ? e.message : "Could not understand that what-if prompt.",
+      )
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  const handleExecuteRebalance = async () => {
+    if (!recommendation || executeLoading) return
+
+    setExecuteLoading(true)
+    setExecuteError(null)
+    setExecuteMessage(null)
+
+    try {
+      const res = await authFetch("/api/rebalance/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          recommendedAllocation: recommendation.recommended,
+          originalAllocation: recommendation.original,
+          sourceScenario: selectedScenario ? uiToApi[selectedScenario] : undefined,
+        }),
+      })
+      const data = (await res.json()) as ExecuteResponse
+      if (!res.ok) throw new Error(data.error ?? "Could not execute rebalance.")
+
+      const traded = data.feeEstimate?.totalTradedValue
+      setExecuteMessage(
+        data.mock
+          ? "Mock mode simulated the rebalance. Sending you back to the dashboard."
+          : `Rebalance executed${traded ? ` with about $${traded.toLocaleString()} traded` : ""}. Sending you back to the dashboard.`,
+      )
+      setTimeout(() => router.push("/dashboard"), 1200)
+    } catch (e) {
+      setExecuteError(
+        e instanceof Error ? e.message : "Could not execute this rebalance.",
+      )
+    } finally {
+      setExecuteLoading(false)
+    }
+  }
 
   const frontierData = (recommendation?.frontier ?? []).map((p) => ({
     volatility: Number(p.volatility.toFixed(1)),
@@ -234,14 +472,14 @@ export default function ScenariosPage() {
     : []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 bg-[#f9f9fe] text-[#1a1c1f]">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <h1 className="text-3xl font-bold text-foreground">What-If Scenarios</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className={headingClass}>What-If Scenarios</h1>
+        <p className={subcopyClass}>
           Stress-test your portfolio with AI forecasts that learn from your stocks&apos; history
           and real economic signals like rates, inflation, unemployment, and market fear.
           Nestor then looks for a portfolio mix with a better risk/reward tradeoff.
@@ -249,45 +487,90 @@ export default function ScenariosPage() {
       </motion.div>
 
       {scenarioError && (
-        <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <p className="rounded-lg border border-[#e0e0e0] border-l-4 border-l-[#8a1f1f] bg-white px-4 py-3 text-sm text-[#8a1f1f] shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           {scenarioError}
         </p>
       )}
 
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-1 md:grid-cols-2 gap-4"
-      >
-        {scenarioCards.map((scenario) => (
-          <motion.div key={scenario.id} variants={itemVariants}>
-            <motion.div
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <Card
-                className={`cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-primary/50 ${selectedScenario === scenario.id ? "border-primary/60" : ""}`}
-                onClick={() => handleScenarioSelect(scenario.id)}
+      <Card className={insightPanelClass}>
+        <CardHeader>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle className="text-[#002141]">Ask a What-If</CardTitle>
+              <CardDescription className="mt-1 text-[#43474f]">
+                Use plain language. Nestor will match your question to a supported scenario and cite the app data it used.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-[#e0e0e0] bg-[#f9f9fe] p-1">
+              <button
+                type="button"
+                onClick={() => setAdvancedMode(false)}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                  !advancedMode
+                    ? "bg-[#002141] text-white shadow-sm"
+                    : "text-[#43474f] hover:text-[#002141]"
+                }`}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-lg ${scenario.bgColor}`}>
-                      <scenario.icon className={`w-6 h-6 ${scenario.color}`} />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-foreground">{scenario.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">{scenario.description}</p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
-        ))}
-      </motion.div>
+                Beginner
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdvancedMode(true)}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                  advancedMode
+                    ? "bg-[#002141] text-white shadow-sm"
+                    : "text-[#43474f] hover:text-[#002141]"
+                }`}
+              >
+                Advanced
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form
+            className="flex flex-col gap-3 md:flex-row"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleChatSubmit()
+            }}
+          >
+            <Input
+              value={chatPrompt}
+              onChange={(event) => setChatPrompt(event.target.value)}
+              placeholder='Try "I need to withdraw 20% next year"'
+              className="h-12 border-[#c3c6d0] bg-white text-[#002141] placeholder:text-[#737780]"
+            />
+            <Button
+              type="submit"
+              disabled={chatLoading || isLoading}
+              className="h-12 bg-[#002141] px-6 hover:bg-[#003666]"
+            >
+              {chatLoading ? "Thinking..." : "Ask Nestor"}
+            </Button>
+          </form>
+
+          <div className="flex flex-wrap gap-2">
+            {promptExamples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => void handleChatSubmit(example)}
+                className="rounded-full border border-[#e0e0e0] bg-white px-3 py-1.5 text-xs font-medium text-[#003666] transition hover:border-[#003666]"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+
+          {chatAnswer && (
+            <div className="rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4">
+              <p className="text-sm leading-6 text-[#1a1c1f]">{chatAnswer}</p>
+            </div>
+          )}
+
+        </CardContent>
+      </Card>
 
       <AnimatePresence mode="wait">
         {isLoading && (
@@ -297,15 +580,15 @@ export default function ScenariosPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <Card>
+            <Card className={panelClass}>
               <CardContent className="p-8">
                 <div className="flex flex-col items-center justify-center gap-4">
                   <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-                    <RefreshCw className="w-8 h-8 text-primary" />
+                    <RefreshCw className="h-8 w-8 text-[#003666]" />
                   </motion.div>
                   <div className="text-center">
-                    <p className="text-muted-foreground font-medium">Running AI scenario analysis...</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="font-medium text-[#002141]">Running AI scenario analysis...</p>
+                    <p className="mt-1 text-xs text-[#43474f]">
                       Fetching macro data, learning from market history, and finding the{" "}
                       <Term term="Efficient Frontier" context="Scenario optimization pipeline">
                         best risk/reward tradeoffs
@@ -332,13 +615,13 @@ export default function ScenariosPage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1 }}
             >
-              <Card className="border-primary/30 bg-primary/5">
+              <Card className={insightPanelClass}>
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-primary" />
-                    <CardTitle>AI-Powered Recommendation</CardTitle>
+                    <Shield className="h-5 w-5 text-[#003666]" />
+                    <CardTitle className="text-[#002141]">AI-Powered Recommendation</CardTitle>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="mt-1 text-xs text-[#43474f]">
                     Built from market forecasts, economic data, and a plain-English explanation.
                   </p>
                 </CardHeader>
@@ -350,11 +633,11 @@ export default function ScenariosPage() {
                       const sections = text.split(/\*\*([^*]+)\*\*/).filter(Boolean);
                       
                       const sectionConfig: Record<string, { icon: typeof Shield; color: string }> = {
-                        "what happened": { icon: AlertTriangle, color: "text-red-500" },
-                        "why this matters now": { icon: Activity, color: "text-primary" },
-                        "what we recommend": { icon: Shield, color: "text-green-500" },
-                        "costs & taxes": { icon: DollarSign, color: "text-amber-500" },
-                        "how this fits your goal": { icon: TrendingUp, color: "text-foreground" },
+                        "what happened": { icon: AlertTriangle, color: "text-[#8a1f1f]" },
+                        "why this matters now": { icon: Activity, color: "text-[#003666]" },
+                        "what we recommend": { icon: Shield, color: "text-[#003666]" },
+                        "costs & taxes": { icon: DollarSign, color: "text-[#8a5d00]" },
+                        "how this fits your goal": { icon: TrendingUp, color: "text-[#002141]" },
                       };
 
                       // If the response has sections, render them nicely
@@ -373,13 +656,13 @@ export default function ScenariosPage() {
                             rendered.push(
                               <div key={i} className="flex gap-3">
                                 <div className="flex-shrink-0 mt-0.5">
-                                  <Icon className={`w-4 h-4 ${config.color}`} />
+                                  <Icon className={`h-4 w-4 ${config.color}`} />
                                 </div>
                                 <div>
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#524700]">
                                     {part.replace(/:$/, "")}
                                   </p>
-                                  <p className="text-sm text-foreground/90 leading-relaxed">
+                                  <p className="text-sm leading-relaxed text-[#1a1c1f]/90">
                                     {body}
                                   </p>
                                 </div>
@@ -393,17 +676,14 @@ export default function ScenariosPage() {
                       
                       // Fallback: render as plain text
                       return (
-                        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-[#1a1c1f]/90">
                           {text}
                         </p>
                       );
                     })()}
                   </div>
-                  {recommendation.meta && (
-                    <p className="mt-4 pt-3 border-t text-xs text-muted-foreground">{recommendation.meta}</p>
-                  )}
-                  {recommendation.method && (
-                    <p className="mt-1 text-xs text-muted-foreground/70 font-mono">
+                  {advancedMode && recommendation.method && (
+                    <p className="mt-1 font-mono text-xs text-[#43474f]/80">
                       {recommendation.method}
                     </p>
                   )}
@@ -416,100 +696,113 @@ export default function ScenariosPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="grid grid-cols-2 md:grid-cols-4 gap-4"
+              className={`grid grid-cols-1 gap-4 ${advancedMode ? "md:grid-cols-5" : "md:grid-cols-2"}`}
             >
               {recommendation.scenarioActualCurrent !== undefined &&
               recommendation.scenarioActualOptimized !== undefined ? (
-                <Card className="border-primary/30 bg-primary/5">
+                <Card className={insightPanelClass}>
                   <CardContent className="p-4 text-center">
-                    <p className="text-xs text-muted-foreground">Scenario Return</p>
-                    <p className="text-lg font-bold text-foreground">
+                    <p className={metricLabelClass}>Scenario Return</p>
+                    <p className="text-lg font-semibold text-[#002141]">
                       <span
                         className={
                           recommendation.scenarioActualCurrent >= 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
+                            ? "text-green-600"
+                            : "text-[#8a1f1f]"
                         }
                       >
                         {recommendation.scenarioActualCurrent >= 0 ? "+" : ""}
                         {recommendation.scenarioActualCurrent.toFixed(1)}%
                       </span>
-                      <span className="text-muted-foreground"> → </span>
+                      <span className="text-[#7aa0d6]"> → </span>
                       <span
                         className={
                           recommendation.scenarioActualOptimized >= 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
+                            ? "text-green-600"
+                            : "text-[#8a1f1f]"
                         }
                       >
                         {recommendation.scenarioActualOptimized >= 0 ? "+" : ""}
                         {recommendation.scenarioActualOptimized.toFixed(1)}%
                       </span>
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 text-xs text-[#43474f]">
                       Actual historical performance
                     </p>
                   </CardContent>
                 </Card>
               ) : (
-                <Card>
+                <Card className={panelClass}>
                   <CardContent className="p-4 text-center">
-                    <p className="text-xs text-muted-foreground">Risk Reduction</p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {recommendation.riskReduction}
-                    </p>
+                    <p className={metricLabelClass}>Scenario Return</p>
+                    <p className="text-2xl font-semibold text-[#002141]">See mix below</p>
                   </CardContent>
                 </Card>
               )}
-              <Card>
+              <Card className={panelClass}>
                 <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">
+                  <p className={metricLabelClass}>Risk Reduction</p>
+                  <p className="text-2xl font-semibold text-green-600">
+                    {recommendation.riskReduction}
+                  </p>
+                  <p className="mt-1 text-xs text-[#43474f]">
+                    Lower estimated portfolio bumpiness
+                  </p>
+                </CardContent>
+              </Card>
+              {advancedMode && (
+                <>
+              <Card className={panelClass}>
+                <CardContent className="p-4 text-center">
+                  <p className={metricLabelClass}>
                     <Term term="Sharpe Ratio" context="Scenario results compare risk-adjusted return before and after rebalancing">
                       risk-adjusted return
                     </Term>
                   </p>
-                  <p className="text-lg font-bold text-foreground">
+                  <p className="text-lg font-semibold text-[#002141]">
                     {recommendation.originalSharpe?.toFixed(2) ?? "—"} → {recommendation.newSharpe?.toFixed(2) ?? "—"}
                   </p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className={panelClass}>
                 <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">
+                  <p className={metricLabelClass}>
                     <Term term="Volatility" context="Scenario results show annualized portfolio risk">
                       yearly price bumpiness
                     </Term>{" "}
                   </p>
-                  <p className="text-lg font-bold text-foreground">
+                  <p className="text-lg font-semibold text-[#002141]">
                     {recommendation.originalVol?.toFixed(1)}% → {recommendation.newVol?.toFixed(1)}%
                   </p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className={panelClass}>
                 <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">
+                  <p className={metricLabelClass}>
                     <Term term="Drawdown" context="Scenario results show the largest peak-to-trough portfolio drop">
                       biggest drop from a high
                     </Term>
                   </p>
-                  <p className="text-lg font-bold text-foreground">
+                  <p className="text-lg font-semibold text-[#002141]">
                     {recommendation.maxDDOriginal?.toFixed(1)}% → {recommendation.maxDDOptimized?.toFixed(1)}%
                   </p>
                 </CardContent>
               </Card>
+                </>
+              )}
             </motion.div>
 
             {/* XGBoost Predictions */}
-            {recommendation.predictions && Object.keys(recommendation.predictions).length > 0 && (
+            {advancedMode && recommendation.predictions && Object.keys(recommendation.predictions).length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.18 }}
               >
-                <Card>
+                <Card className={panelClass}>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-primary" />
+                      <Zap className="h-5 w-5 text-[#003666]" />
                       <Term term="XGBoost" context="Scenario page forecast model">
                         AI return forecasts
                       </Term>
@@ -521,7 +814,7 @@ export default function ScenariosPage() {
                       </Term>{" "}
                       for each asset
                       {recommendation.pipeline && (
-                        <span className="block mt-1 text-xs font-mono text-muted-foreground/70">
+                        <span className="mt-1 block font-mono text-xs text-[#43474f]/80">
                           Forecast model + portfolio optimizer
                         </span>
                       )}
@@ -532,21 +825,21 @@ export default function ScenariosPage() {
                       {Object.entries(recommendation.predictions).map(([ticker, pred]) => (
                         <div
                           key={ticker}
-                          className="rounded-lg border p-4 space-y-2"
+                          className="space-y-2 rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-mono font-semibold text-foreground">{ticker}</span>
+                            <span className="font-mono font-semibold text-[#002141]">{ticker}</span>
                             <span
                               className={`text-sm font-medium ${
                                 pred.predicted_return > 0
-                                  ? "text-green-600 dark:text-green-400"
-                                  : "text-red-600 dark:text-red-400"
+                                  ? "text-green-600"
+                                  : "text-[#8a1f1f]"
                               }`}
                             >
                               {pred.predicted_return > 0 ? "+" : ""}{pred.predicted_return}%
                             </span>
                           </div>
-                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <div className="flex items-center justify-between text-sm text-[#43474f]">
                             <span>
                               <Term term="Volatility" context="Per-asset forecast card">
                                 expected bumpiness
@@ -555,7 +848,7 @@ export default function ScenariosPage() {
                             <span>{pred.predicted_vol}%</span>
                           </div>
                           {pred.cv_rmse > 0 && (
-                            <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                            <div className="flex items-center justify-between text-xs text-[#43474f]/80">
                               <span>
                                 <Term term="RMSE" context="Per-asset forecast model validation">
                                   model error
@@ -565,8 +858,8 @@ export default function ScenariosPage() {
                             </div>
                           )}
                           {Object.keys(pred.feature_importances || {}).length > 0 && (
-                            <div className="pt-2 border-t space-y-1">
-                              <p className="text-xs text-muted-foreground font-medium">
+                            <div className="space-y-1 border-t border-[#e0e0e0] pt-2">
+                              <p className="text-xs font-medium text-[#43474f]">
                                 <Term term="Feature importance" context="Top model inputs for a prediction">
                                   What influenced this
                                 </Term>
@@ -579,20 +872,20 @@ export default function ScenariosPage() {
                                     key={feat}
                                     className="flex items-center gap-2 text-xs"
                                   >
-                                    <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#eeedf2]">
                                       <div
-                                        className="h-full bg-primary rounded-full"
+                                        className="h-full rounded-full bg-[#003666]"
                                         style={{ width: `${Math.min(pct, 100)}%` }}
                                       />
                                     </div>
-                                    <span className="text-muted-foreground w-28 truncate">{feat.replace(/_/g, " ")}</span>
-                                    <span className="text-muted-foreground/70 w-10 text-right">{pct}%</span>
+                                    <span className="w-28 truncate text-[#43474f]">{feat.replace(/_/g, " ")}</span>
+                                    <span className="w-10 text-right text-[#43474f]/80">{pct}%</span>
                                   </div>
                                 ))}
                             </div>
                           )}
                           {pred.error && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400">Fallback: {pred.error}</p>
+                            <p className="text-xs text-[#8a5d00]">Fallback: {pred.error}</p>
                           )}
                         </div>
                       ))}
@@ -603,16 +896,16 @@ export default function ScenariosPage() {
             )}
 
             {/* LSTM Predictions */}
-            {recommendation.lstmPredictions && Object.keys(recommendation.lstmPredictions).length > 0 && (
+            {advancedMode && recommendation.lstmPredictions && Object.keys(recommendation.lstmPredictions).length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.19 }}
               >
-                <Card>
+                <Card className={panelClass}>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-primary" />
+                      <Activity className="h-5 w-5 text-[#003666]" />
                       <Term term="LSTM" context="Scenario page 30-day price forecast model">
                         AI 30-day price forecast
                       </Term>
@@ -624,14 +917,14 @@ export default function ScenariosPage() {
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {Object.entries(recommendation.lstmPredictions).map(([ticker, pred]) => (
-                        <div key={ticker} className="rounded-lg border p-4 space-y-2">
+                        <div key={ticker} className="space-y-2 rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4">
                           <div className="flex items-center justify-between">
-                            <span className="font-mono font-semibold text-foreground">{ticker}</span>
+                            <span className="font-mono font-semibold text-[#002141]">{ticker}</span>
                             <span
                               className={`text-sm font-medium ${
                                 (pred.predicted_return ?? 0) > 0
-                                  ? "text-green-600 dark:text-green-400"
-                                  : "text-red-600 dark:text-red-400"
+                                  ? "text-green-600"
+                                  : "text-[#8a1f1f]"
                               }`}
                             >
                               {(pred.predicted_return ?? 0) > 0 ? "+" : ""}
@@ -639,23 +932,23 @@ export default function ScenariosPage() {
                             </span>
                           </div>
                           {pred.current_price !== undefined && (
-                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <div className="flex items-center justify-between text-sm text-[#43474f]">
                               <span>Current</span>
                               <span>${pred.current_price.toFixed(2)}</span>
                             </div>
                           )}
                           {pred.forecast?.length > 0 && (
-                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <div className="flex items-center justify-between text-sm text-[#43474f]">
                               <span>30-day target</span>
                               <span>${pred.forecast[pred.forecast.length - 1].price.toFixed(2)}</span>
                             </div>
                           )}
-                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <div className="flex items-center justify-between text-sm text-[#43474f]">
                             <span>Annualized vol</span>
                             <span>{(pred.predicted_vol ?? 0).toFixed(1)}%</span>
                           </div>
                           {pred.forecast?.length > 0 && (
-                            <div className="pt-2 border-t">
+                            <div className="border-t border-[#e0e0e0] pt-2">
                               <div className="h-12">
                                 <ResponsiveContainer width="100%" height="100%">
                                   <LineChart
@@ -667,7 +960,7 @@ export default function ScenariosPage() {
                                     <Line
                                       type="monotone"
                                       dataKey="price"
-                                      stroke="hsl(199, 89%, 48%)"
+                                      stroke="#7aa0d6"
                                       strokeWidth={2}
                                       dot={false}
                                     />
@@ -681,7 +974,7 @@ export default function ScenariosPage() {
                             </div>
                           )}
                           {pred.error && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400">{pred.error}</p>
+                            <p className="text-xs text-[#8a5d00]">{pred.error}</p>
                           )}
                         </div>
                       ))}
@@ -691,38 +984,7 @@ export default function ScenariosPage() {
               </motion.div>
             )}
 
-            {/* Allocation Comparison Chart */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-primary" />
-                    <Term term="Allocation" context="Scenario chart compares current and recommended portfolio mix">
-                      Portfolio mix comparison
-                    </Term>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={comparisonData} barGap={4}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis dataKey="ticker" fontSize={12} />
-                        <YAxis fontSize={12} tickFormatter={(v) => `${v}%`} />
-                        <Tooltip formatter={(v: number) => `${v}%`} />
-                        <Bar dataKey="current" name="Current" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} opacity={0.5} />
-                        <Bar dataKey="recommended" name="Optimized" fill="hsl(221, 83%, 53%)" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
+            {advancedMode && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Efficient Frontier */}
               {frontierData.length > 2 && (
@@ -731,10 +993,10 @@ export default function ScenariosPage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.25 }}
                 >
-                  <Card>
+                  <Card className={panelClass}>
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-primary" />
+                        <Activity className="h-4 w-4 text-[#003666]" />
                         <Term term="Efficient Frontier" context="Scenario chart of optimized risk and return combinations">
                           Best risk/reward tradeoffs
                         </Term>
@@ -747,7 +1009,7 @@ export default function ScenariosPage() {
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={frontierData}>
-                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <CartesianGrid stroke="#e0e0e0" strokeDasharray="3 3" />
                             <XAxis
                               dataKey="volatility"
                               fontSize={11}
@@ -766,9 +1028,9 @@ export default function ScenariosPage() {
                             <Line
                               type="monotone"
                               dataKey="return"
-                              stroke="hsl(221, 83%, 53%)"
+                              stroke="#003666"
                               strokeWidth={2}
-                              dot={{ r: 4, fill: "hsl(221, 83%, 53%)" }}
+                              dot={{ r: 4, fill: "#003666" }}
                             />
                           </LineChart>
                         </ResponsiveContainer>
@@ -785,10 +1047,10 @@ export default function ScenariosPage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.25 }}
                 >
-                  <Card>
+                  <Card className={panelClass}>
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                        <AlertTriangle className="h-4 w-4 text-[#8a5d00]" />
                         <Term term="Risk contribution" context="Scenario chart shows which holdings drive portfolio risk">
                           What is driving portfolio risk
                         </Term>
@@ -801,11 +1063,11 @@ export default function ScenariosPage() {
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={riskContribData} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <CartesianGrid stroke="#e0e0e0" strokeDasharray="3 3" />
                             <XAxis type="number" fontSize={11} tickFormatter={(v) => `${v}%`} />
                             <YAxis dataKey="ticker" type="category" fontSize={12} width={50} />
                             <Tooltip formatter={(v: number) => `${v}%`} />
-                            <Bar dataKey="contribution" name="Risk share %" fill="hsl(24, 95%, 53%)" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="contribution" name="Risk share %" fill="#f7e382" radius={[0, 4, 4, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -814,114 +1076,17 @@ export default function ScenariosPage() {
                 </motion.div>
               )}
             </div>
-
-            {/* Allocation Detail Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-orange-500" />
-                      Current portfolio mix
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {Object.entries(recommendation.original).map(([ticker, percent], index) => (
-                        <motion.div
-                          key={ticker}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.3 + index * 0.05 }}
-                          className="flex items-center gap-3"
-                        >
-                          <span className="w-12 font-mono text-sm font-medium">{ticker}</span>
-                          <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full bg-muted-foreground/50 rounded-full"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(percent, 100)}%` }}
-                              transition={{ duration: 0.6, delay: 0.4 + index * 0.05 }}
-                            />
-                          </div>
-                          <span className="w-10 text-sm text-muted-foreground text-right">{Math.round(percent)}%</span>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Card className="border-green-500/30">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-green-500" />
-                      Recommended portfolio mix
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {Object.entries(recommendation.recommended).map(([ticker, percent], index) => (
-                        <motion.div
-                          key={ticker}
-                          initial={{ opacity: 0, x: 10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.3 + index * 0.05 }}
-                          className="flex items-center gap-3"
-                        >
-                          <span className="w-12 font-mono text-sm font-medium">{ticker}</span>
-                          <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full bg-primary rounded-full"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(percent, 100)}%` }}
-                              transition={{ duration: 0.6, delay: 0.4 + index * 0.05 }}
-                            />
-                          </div>
-                          <span className="w-10 text-sm text-muted-foreground text-right">{Math.round(percent)}%</span>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-
-            {/* Actions */}
-            {recommendation.actions && recommendation.actions.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-              >
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Suggested Moves</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {recommendation.actions.map((action, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm">
-                          <ArrowRight className="w-3 h-3 text-primary flex-shrink-0" />
-                          <span className="text-foreground">{action}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
             )}
 
-            <TaxPreview preview={recommendation.taxPreview} />
+            <SimpleRebalanceCard
+              original={recommendation.original}
+              recommended={recommendation.recommended}
+            />
+
+            <CostsAndTaxesCard
+              feeEstimate={recommendation.feeEstimate}
+              taxPreview={recommendation.taxPreview}
+            />
 
             {/* Execute Button */}
             <motion.div
@@ -929,19 +1094,34 @@ export default function ScenariosPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
             >
-              <Card>
+              <Card className={panelClass}>
                 <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">This proposal has been saved to your account</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Process: forecast returns, find a better portfolio mix, then explain the result.
+                      <p className="text-sm font-medium text-[#002141]">Ready to apply this recommendation?</p>
+                      <p className="mt-1 text-xs text-[#43474f]">
+                        Nestor will update your demo holdings to the suggested dollar weights using current prices where available.
                       </p>
+                      {executeMessage && (
+                        <p className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                          {executeMessage}
+                        </p>
+                      )}
+                      {executeError && (
+                        <p className="mt-3 rounded-md border border-[#8a1f1f]/20 bg-[#8a1f1f]/5 px-3 py-2 text-xs text-[#8a1f1f]">
+                          {executeError}
+                        </p>
+                      )}
                     </div>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Button className="gap-2" size="lg">
-                        Execute Rebalance
-                        <ArrowRight className="w-4 h-4" />
+                      <Button
+                        className="gap-2 bg-[#002141] hover:bg-[#003666]"
+                        size="lg"
+                        disabled={executeLoading}
+                        onClick={() => void handleExecuteRebalance()}
+                      >
+                        {executeLoading ? "Executing..." : "Execute Rebalance"}
+                        <ArrowRight className="h-4 w-4" />
                       </Button>
                     </motion.div>
                   </div>

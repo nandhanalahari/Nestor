@@ -42,14 +42,14 @@ export function XPBar({
   return (
     <div
       className={cn(
-        "relative flex min-w-[9.5rem] max-w-[11rem] flex-col gap-1",
+        "relative flex min-w-[9.5rem] max-w-[11rem] flex-col gap-1 font-[Inter]",
         className,
       )}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <p className="truncate text-[11px] font-semibold leading-none text-foreground">
-          <span className="text-primary">{levelLabel}</span>
-          <span className="font-normal text-muted-foreground">
+        <p className="truncate text-[11px] font-semibold leading-none text-[#002141]">
+          <span className="text-[#003666]">{levelLabel}</span>
+          <span className="font-normal text-[#3f5165]">
             {" "}
             · Lv {level}
           </span>
@@ -59,7 +59,10 @@ export function XPBar({
       <div className="relative">
         <Progress
           value={pct}
-          className={cn("h-1.5", isLoading && "animate-pulse opacity-60")}
+          className={cn(
+            "h-1.5 bg-[#eef4fb] [&_[data-slot=progress-indicator]]:bg-[#003666]",
+            isLoading && "animate-pulse opacity-60",
+          )}
         />
         <AnimatePresence mode="wait">
           {recentGain > 0 ? (
@@ -69,7 +72,7 @@ export function XPBar({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.92 }}
               transition={{ type: "spring", stiffness: 420, damping: 26 }}
-              className="pointer-events-none absolute -top-7 right-0 z-10 whitespace-nowrap rounded-md border border-primary/20 bg-primary px-2 py-0.5 text-[10px] font-bold tabular-nums text-primary-foreground shadow-sm"
+              className="pointer-events-none absolute -top-7 right-0 z-10 whitespace-nowrap rounded-md border border-[#f7e382] bg-[#fffbe8] px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#002141] shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
             >
               +{recentGain} XP
             </motion.span>
@@ -77,7 +80,7 @@ export function XPBar({
         </AnimatePresence>
       </div>
 
-      <p className="text-[10px] tabular-nums text-muted-foreground leading-none">
+      <p className="text-[10px] leading-none tabular-nums text-[#3f5165]">
         {level >= 7
           ? "Max level"
           : isLoading

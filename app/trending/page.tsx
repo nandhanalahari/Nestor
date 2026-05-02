@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
+import { motion, type Variants } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,15 +35,20 @@ type TrendingData = {
   error?: string
 }
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 10, opacity: 0 },
   visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100, damping: 12 } },
 }
+
+const panelClass =
+  "border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const headingClass = "font-display text-3xl font-semibold text-[#002141]"
+const subcopyClass = "mt-2 max-w-4xl text-sm leading-6 text-[#43474f]"
 
 function formatVolume(v: number): string {
   if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`
@@ -56,23 +61,23 @@ function StockRow({ stock, rank }: { stock: TrendingStock; rank: number }) {
   const isUp = stock.change_percent >= 0
   return (
     <motion.div variants={itemVariants} className="flex items-center gap-4 py-3">
-      <span className="text-sm text-muted-foreground w-6 text-right font-mono">{rank}</span>
-      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-        <span className="text-xs font-bold text-primary">{stock.ticker.slice(0, 4)}</span>
+      <span className="w-6 text-right font-mono text-sm text-[#43474f]">{rank}</span>
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#7aa0d6]/20">
+        <span className="text-xs font-bold text-[#003666]">{stock.ticker.slice(0, 4)}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-foreground text-sm truncate">{stock.ticker}</p>
-        <p className="text-xs text-muted-foreground truncate">{stock.exchange}</p>
+        <p className="truncate text-sm font-medium text-[#002141]">{stock.ticker}</p>
+        <p className="truncate text-xs text-[#43474f]">{stock.exchange}</p>
       </div>
       <div className="text-right">
-        <p className="font-medium text-foreground text-sm">{usd.format(stock.price)}</p>
-        <p className={`text-xs flex items-center justify-end gap-0.5 ${isUp ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-          {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+        <p className="text-sm font-medium text-[#1a1c1f]">{usd.format(stock.price)}</p>
+        <p className={`flex items-center justify-end gap-0.5 text-xs ${isUp ? "text-green-600" : "text-[#8a1f1f]"}`}>
+          {isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
           {isUp ? "+" : ""}{stock.change_percent.toFixed(2)}%
         </p>
       </div>
       <div className="text-right w-16">
-        <p className="text-xs text-muted-foreground">{formatVolume(stock.volume)}</p>
+        <p className="text-xs text-[#43474f]">{formatVolume(stock.volume)}</p>
       </div>
     </motion.div>
   )
@@ -106,41 +111,41 @@ export default function TrendingPage() {
   }, [])
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 bg-[#f9f9fe] text-[#1a1c1f]">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-start justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <Flame className="w-8 h-8 text-orange-500" />
+          <h1 className={`${headingClass} flex items-center gap-3`}>
+            <Flame className="h-8 w-8 text-[#8a5d00]" />
             Trending Stocks
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className={subcopyClass}>
             Top gainers, biggest losers, and most actively traded stocks today.
             {data?.asOf && (
-              <span className="text-xs ml-2">
+              <span className="ml-2 text-xs">
                 Updated {new Date(data.asOf).toLocaleString()} · via {data.source}
               </span>
             )}
           </p>
         </div>
-        <Button onClick={fetchTrending} disabled={loading} variant="outline" className="gap-2">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        <Button onClick={fetchTrending} disabled={loading} variant="outline" className="gap-2 border-[#e0e0e0] bg-white text-[#002141] hover:bg-[#f9f9fe]">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Refresh
         </Button>
       </motion.div>
 
       {error && (
-        <p className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <p className="rounded-lg border border-[#e0e0e0] border-l-4 border-l-[#8a1f1f] bg-white px-4 py-3 text-sm text-[#8a1f1f] shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           {error}
         </p>
       )}
 
       {loading && !data ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -150,23 +155,23 @@ export default function TrendingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card>
+            <Card className={panelClass}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <TrendingUp className="w-5 h-5 text-green-500" />
+                <CardTitle className="flex items-center gap-2 text-lg text-[#002141]">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
                   Top Gainers
                 </CardTitle>
-                <CardDescription>Biggest price increases today</CardDescription>
+                <CardDescription className="text-[#43474f]">Biggest price increases today</CardDescription>
               </CardHeader>
               <CardContent>
                 {data?.gainers?.length ? (
-                  <motion.div variants={containerVariants} initial="hidden" animate="visible" className="divide-y">
+                  <motion.div variants={containerVariants} initial="hidden" animate="visible" className="divide-y divide-[#e0e0e0]">
                     {data.gainers.map((stock, i) => (
                       <StockRow key={stock.ticker} stock={stock} rank={i + 1} />
                     ))}
                   </motion.div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
+                  <p className="py-8 text-center text-sm text-[#43474f]">No data available</p>
                 )}
               </CardContent>
             </Card>
@@ -178,23 +183,23 @@ export default function TrendingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card>
+            <Card className={panelClass}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <TrendingDown className="w-5 h-5 text-red-500" />
+                <CardTitle className="flex items-center gap-2 text-lg text-[#002141]">
+                  <TrendingDown className="h-5 w-5 text-[#8a1f1f]" />
                   Top Losers
                 </CardTitle>
-                <CardDescription>Biggest price drops today</CardDescription>
+                <CardDescription className="text-[#43474f]">Biggest price drops today</CardDescription>
               </CardHeader>
               <CardContent>
                 {data?.losers?.length ? (
-                  <motion.div variants={containerVariants} initial="hidden" animate="visible" className="divide-y">
+                  <motion.div variants={containerVariants} initial="hidden" animate="visible" className="divide-y divide-[#e0e0e0]">
                     {data.losers.map((stock, i) => (
                       <StockRow key={stock.ticker} stock={stock} rank={i + 1} />
                     ))}
                   </motion.div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
+                  <p className="py-8 text-center text-sm text-[#43474f]">No data available</p>
                 )}
               </CardContent>
             </Card>
@@ -206,23 +211,23 @@ export default function TrendingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card>
+            <Card className={panelClass}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Activity className="w-5 h-5 text-primary" />
+                <CardTitle className="flex items-center gap-2 text-lg text-[#002141]">
+                  <Activity className="h-5 w-5 text-[#003666]" />
                   Most Active
                 </CardTitle>
-                <CardDescription>Highest trading volume today</CardDescription>
+                <CardDescription className="text-[#43474f]">Highest trading volume today</CardDescription>
               </CardHeader>
               <CardContent>
                 {data?.mostActive?.length ? (
-                  <motion.div variants={containerVariants} initial="hidden" animate="visible" className="divide-y">
+                  <motion.div variants={containerVariants} initial="hidden" animate="visible" className="divide-y divide-[#e0e0e0]">
                     {data.mostActive.map((stock, i) => (
                       <StockRow key={stock.ticker} stock={stock} rank={i + 1} />
                     ))}
                   </motion.div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
+                  <p className="py-8 text-center text-sm text-[#43474f]">No data available</p>
                 )}
               </CardContent>
             </Card>

@@ -36,16 +36,16 @@ export function TaxPreview({ preview }: Props) {
     .reduce((sum, line) => sum + line.estimatedTax, 0)
 
   return (
-    <Card className="border-amber-500/30 bg-amber-50/60 dark:bg-amber-950/20">
+    <Card className="border-[#e0e0e0] border-l-4 border-l-[#f7e382] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <ReceiptText className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        <CardTitle className="flex items-center gap-2 text-lg text-[#002141]">
+          <ReceiptText className="h-5 w-5 text-[#8a5d00]" />
           Tax Preview
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="rounded-full text-muted-foreground hover:text-foreground"
+                className="rounded-full text-[#43474f] hover:text-[#002141]"
                 aria-label="Tax preview details"
               >
                 <Info className="h-4 w-4" />
@@ -61,41 +61,41 @@ export function TaxPreview({ preview }: Props) {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <p className="text-xs text-muted-foreground">Realized gain/loss</p>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-xs font-medium uppercase text-[#43474f]">Realized gain/loss</p>
+            <p className="text-2xl font-semibold text-[#002141]">
               {currency.format(preview.totalRealizedGain)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs font-medium uppercase text-[#43474f]">
               Estimated federal tax
             </p>
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+            <p className="text-2xl font-semibold text-[#8a5d00]">
               {currency.format(preview.estimatedFederalTax)}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 rounded-md border bg-background/70 p-3 text-sm sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 rounded-md border border-[#e0e0e0] bg-[#f9f9fe] p-3 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-xs font-medium text-[#43474f]">
               Short-term gain
             </p>
-            <p className="font-semibold text-foreground">
+            <p className="font-semibold text-[#002141]">
               {currency.format(shortTermGain)}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[#43474f]">
               approx. {currency.format(shortTermTax)} tax at 22%
             </p>
           </div>
           <div>
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-xs font-medium text-[#43474f]">
               Long-term gain
             </p>
-            <p className="font-semibold text-foreground">
+            <p className="font-semibold text-[#002141]">
               {currency.format(longTermGain)}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[#43474f]">
               approx. {currency.format(longTermTax)} tax at 15%
             </p>
           </div>
@@ -105,22 +105,22 @@ export function TaxPreview({ preview }: Props) {
           {preview.lines.map((line) => (
             <div
               key={line.ticker}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background/70 px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#e0e0e0] bg-[#f9f9fe] px-3 py-2 text-sm"
             >
               <div>
-                <p className="font-mono font-medium text-foreground">
+                <p className="font-mono font-medium text-[#002141]">
                   {line.ticker}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[#43474f]">
                   Sell {line.sharesSold.toLocaleString()} shares,{" "}
                   {line.holdingPeriod} at {(line.taxRate * 100).toFixed(0)}%
                 </p>
               </div>
               <div className="text-right">
-                <p className="font-medium text-foreground">
+                <p className="font-medium text-[#002141]">
                   {currency.format(line.estimatedTax)}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[#43474f]">
                   gain {currency.format(line.realizedGain)}
                 </p>
               </div>
@@ -128,16 +128,16 @@ export function TaxPreview({ preview }: Props) {
           ))}
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[#43474f]">
           Simplified federal estimate. Actual taxes depend on bracket/state.
         </p>
 
         {preview.warnings.length > 0 && (
-          <div className="space-y-1 border-t pt-3">
+          <div className="space-y-1 border-t border-[#e0e0e0] pt-3">
             {preview.warnings.map((warning) => (
               <p
                 key={warning}
-                className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300"
+                className="flex items-start gap-2 text-xs text-[#8a5d00]"
               >
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
                 <span>{warning}</span>

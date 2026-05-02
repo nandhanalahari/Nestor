@@ -21,13 +21,13 @@ import {
 import type { ProfileLabel } from "@/lib/profile";
 
 const COLORS = [
-  "hsl(221, 83%, 53%)",
-  "hsl(142, 71%, 45%)",
-  "hsl(262, 83%, 58%)",
-  "hsl(24, 95%, 53%)",
-  "hsl(355, 78%, 56%)",
-  "hsl(199, 89%, 48%)",
-  "hsl(45, 93%, 47%)",
+  "#002141",
+  "#7aa0d6",
+  "#f7e382",
+  "#003666",
+  "#8ca7c8",
+  "#d9c95f",
+  "#4c6582",
 ];
 
 type Props = {
@@ -59,7 +59,7 @@ function readLocalProfileLabel(): ProfileLabel | null {
   }
 }
 
-const MUTED_COLOR = "hsl(220, 10%, 75%)";
+const MUTED_COLOR = "#d9dce5";
 
 export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -98,9 +98,9 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
 
   if (loadingProfile) {
     return (
-      <Card>
+      <Card className="rounded-lg border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
         <CardContent className="p-12 flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <Loader2 className="h-6 w-6 animate-spin text-[#003666]" />
         </CardContent>
       </Card>
     );
@@ -110,18 +110,18 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
   if (!profileLabel) {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-primary/30">
+        <Card className="rounded-lg border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <CardContent className="p-10 text-center space-y-3">
-            <Sparkles className="w-10 h-10 text-primary mx-auto" />
-            <h3 className="text-lg font-semibold text-foreground">
+            <Sparkles className="mx-auto h-10 w-10 text-[#7aa0d6]" />
+            <h3 className="font-display text-lg font-semibold text-[#002141]">
               Take the risk quiz to get a personalized starter portfolio
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm leading-6 text-[#43474f]">
               Five quick questions, then we'll match you to a starter portfolio
               you can build with one click.
             </p>
             <Link href="/onboarding">
-              <Button className="gap-2 mt-2">
+              <Button className="mt-2 gap-2 bg-[#002141] text-white hover:bg-[#003666]">
                 Start the quiz <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -163,18 +163,18 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <Card className="border-primary/30">
+      <Card className="rounded-lg border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg">
-              Recommended for <span className="text-primary">The {profileLabel}</span>
+            <Sparkles className="h-5 w-5 text-[#7aa0d6]" />
+            <CardTitle className="font-display text-lg text-[#002141]">
+              Recommended for <span className="text-[#003666]">The {profileLabel}</span>
             </CardTitle>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">{template.rationale}</p>
+          <p className="goldman-insight-accent mt-2 text-sm leading-6 text-[#524700]">{template.rationale}</p>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6 md:grid-cols-2">
             {/* Pie chart */}
             <div className="h-64 flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
@@ -231,12 +231,12 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
                     onClick={() =>
                       setActiveIndex((cur) => (cur === i ? null : i))
                     }
-                    className={`w-full flex items-start gap-3 py-1 text-left transition-opacity rounded-md hover:bg-muted/40 px-2 -mx-2 ${
+                    className={`-mx-2 flex w-full items-start gap-3 rounded-md px-2 py-2 text-left transition-opacity hover:bg-[#eef3fa] ${
                       isActive ? "opacity-100" : "opacity-40"
                     }`}
                   >
                     <div
-                      className="w-3 h-3 rounded-full mt-1.5 shrink-0"
+                      className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
                       style={{
                         background: isActive
                           ? COLORS[i % COLORS.length]
@@ -245,13 +245,13 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="font-semibold text-foreground">{t.ticker}</span>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="font-display font-semibold text-[#002141]">{t.ticker}</span>
+                        <span className="text-sm font-semibold text-[#003666]">
                           {Math.round(t.weight * 100)}%
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{t.name}</p>
-                      <p className="text-xs text-muted-foreground/80 mt-0.5">{t.role}</p>
+                      <p className="truncate text-xs text-[#43474f]">{t.name}</p>
+                      <p className="mt-0.5 text-xs text-[#6b7280]">{t.role}</p>
                     </div>
                   </button>
                 );
@@ -263,12 +263,12 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
             <p className="mt-4 text-sm text-destructive">{error}</p>
           )}
 
-          <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Button
               onClick={handleBuild}
               disabled={seeding}
               size="lg"
-              className="gap-2"
+              className="gap-2 bg-[#002141] text-white hover:bg-[#003666]"
             >
               {seeding ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -280,7 +280,7 @@ export function StarterPortfolioCard({ onSeeded, onPickMyself }: Props) {
             <button
               type="button"
               onClick={onPickMyself}
-              className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+              className="text-sm font-medium text-[#43474f] underline-offset-4 hover:text-[#002141] hover:underline"
             >
               I'd rather pick myself
             </button>

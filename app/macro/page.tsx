@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, type Variants } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Term } from "@/components/Term"
@@ -52,78 +52,78 @@ const INDICATOR_CONFIG: Record<
 > = {
   DFF: {
     icon: Landmark,
-    color: "hsl(221, 83%, 53%)",
+    color: "#003666",
     unit: "%",
     description: "The overnight rate banks charge each other, set by the Federal Reserve",
   },
   CPIAUCSL: {
     icon: DollarSign,
-    color: "hsl(24, 95%, 53%)",
+    color: "#8a5d00",
     unit: "",
     description: "Tracks the average change in prices paid by urban consumers",
   },
   UNRATE: {
     icon: Briefcase,
-    color: "hsl(355, 78%, 56%)",
+    color: "#8a1f1f",
     unit: "%",
     description: "Percentage of the labor force that is currently unemployed",
   },
   GDP: {
     icon: BarChart3,
-    color: "hsl(142, 71%, 45%)",
+    color: "#7aa0d6",
     unit: "B",
     description: "Total value of goods and services produced in the United States",
   },
   DGS10: {
     icon: TrendingUp,
-    color: "hsl(262, 83%, 58%)",
+    color: "#002141",
     unit: "%",
     description: "Yield on 10-year U.S. Treasury bonds — key long-term rate benchmark",
   },
   DGS2: {
     icon: TrendingDown,
-    color: "hsl(199, 89%, 48%)",
+    color: "#7aa0d6",
     unit: "%",
     description: "Yield on 2-year U.S. Treasury bonds — reflects near-term rate expectations",
   },
   VIXCLS: {
     icon: Activity,
-    color: "hsl(355, 78%, 56%)",
+    color: "#8a1f1f",
     unit: "",
     description: 'The "fear gauge" — measures expected stock market volatility',
   },
   M2SL: {
     icon: DollarSign,
-    color: "hsl(45, 93%, 47%)",
+    color: "#8a5d00",
     unit: "B",
     description: "Total amount of money in circulation including savings & money market",
   },
   UMCSENT: {
     icon: Globe,
-    color: "hsl(330, 81%, 60%)",
+    color: "#003666",
     unit: "",
     description: "University of Michigan survey measuring consumer confidence",
   },
   INDPRO: {
     icon: Shield,
-    color: "hsl(142, 71%, 45%)",
+    color: "#7aa0d6",
     unit: "",
     description: "Measures output of factories, mines, and utilities in the U.S.",
   },
   YIELD_SPREAD: {
     icon: Minus,
-    color: "hsl(262, 83%, 58%)",
+    color: "#002141",
     unit: "%",
     description: "Difference between 10Y and 2Y yields — negative means inverted yield curve (recession signal)",
   },
 }
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
     y: 0,
@@ -131,6 +131,13 @@ const itemVariants = {
     transition: { type: "spring", stiffness: 100, damping: 12 },
   },
 }
+
+const panelClass =
+  "border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const insightPanelClass =
+  "border-[#e0e0e0] border-l-4 border-l-[#f7e382] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const headingClass = "font-display text-3xl font-semibold text-[#002141]"
+const subcopyClass = "mt-2 max-w-4xl text-sm leading-6 text-[#43474f]"
 
 export default function MacroPage() {
   const [indicators, setIndicators] = useState<Record<string, MacroIndicator>>({})
@@ -202,7 +209,7 @@ export default function MacroPage() {
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 bg-[#f9f9fe] text-[#1a1c1f]">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -211,11 +218,11 @@ export default function MacroPage() {
         className="flex items-start justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <Globe className="w-8 h-8 text-primary" />
+          <h1 className={`${headingClass} flex items-center gap-3`}>
+            <Globe className="h-8 w-8 text-[#003666]" />
             Macro Indicators
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className={subcopyClass}>
             Real-time economic data from the Federal Reserve (FRED). These
             indicators are automatically fed into XGBoost predictions.
           </p>
@@ -224,12 +231,12 @@ export default function MacroPage() {
           variant="outline"
           onClick={fetchMacro}
           disabled={loading}
-          className="gap-2"
+          className="gap-2 border-[#e0e0e0] bg-white text-[#002141] hover:bg-[#f9f9fe]"
         >
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="h-4 w-4" />
           )}
           Refresh
         </Button>
@@ -240,12 +247,12 @@ export default function MacroPage() {
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="p-4 flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-destructive" />
+          <Card className="border-[#e0e0e0] border-l-4 border-l-[#8a1f1f] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+            <CardContent className="flex items-center gap-3 p-4">
+              <AlertCircle className="h-5 w-5 text-[#8a1f1f]" />
               <div>
-                <p className="text-sm font-medium text-destructive">{error}</p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-sm font-medium text-[#8a1f1f]">{error}</p>
+                <p className="mt-1 text-xs text-[#43474f]">
                   Make sure the ML pipeline is running (npm run dev) and
                   FRED_API_KEY is set in .env.local
                 </p>
@@ -258,8 +265,8 @@ export default function MacroPage() {
       {loading && !Object.keys(indicators).length ? (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-            <p className="text-sm text-muted-foreground mt-3">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#003666]" />
+            <p className="mt-3 text-sm text-[#43474f]">
               Fetching economic data from FRED...
             </p>
           </div>
@@ -284,25 +291,25 @@ export default function MacroPage() {
               return (
                 <motion.div key={id} variants={itemVariants}>
                   <Card
-                    className="hover:shadow-lg transition-all duration-300 cursor-pointer group border-l-4"
+                    className="group cursor-pointer border-[#e0e0e0] border-l-4 bg-white transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_20px_rgba(0,0,0,0.06)]"
                     style={{ borderLeftColor: config?.color }}
                     onClick={() => id !== "YIELD_SPREAD" && fetchSeries(id)}
                   >
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                      <CardTitle className="text-sm font-medium text-[#43474f]">
                         {label}
                       </CardTitle>
                       {config && (
                         <config.icon
-                          className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors"
+                          className="h-4 w-4 text-[#7aa0d6] transition-colors group-hover:text-[#003666]"
                         />
                       )}
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-foreground">
+                      <div className="text-2xl font-semibold text-[#002141]">
                         {ind.value?.toFixed(2)}
                         {config?.unit && (
-                          <span className="text-sm font-normal text-muted-foreground ml-1">
+                          <span className="ml-1 text-sm font-normal text-[#43474f]">
                             {config.unit}
                           </span>
                         )}
@@ -310,25 +317,25 @@ export default function MacroPage() {
                       <div className="flex items-center gap-2 mt-1">
                         {ind.change_1m != null && (
                           <span
-                            className={`text-xs flex items-center gap-0.5 ${
+                            className={`flex items-center gap-0.5 text-xs ${
                               isUp
-                                ? "text-green-600 dark:text-green-400"
+                                ? "text-green-600"
                                 : isDown
-                                  ? "text-red-600 dark:text-red-400"
-                                  : "text-muted-foreground"
+                                  ? "text-[#8a1f1f]"
+                                  : "text-[#43474f]"
                             }`}
                           >
                             {isUp ? (
-                              <ArrowUpRight className="w-3 h-3" />
+                              <ArrowUpRight className="h-3 w-3" />
                             ) : isDown ? (
-                              <ArrowDownRight className="w-3 h-3" />
+                              <ArrowDownRight className="h-3 w-3" />
                             ) : null}
                             {ind.change_1m > 0 ? "+" : ""}
                             {ind.change_1m?.toFixed(2)}%
                           </span>
                         )}
                         {isInverted && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
+                          <span className="rounded bg-[#f7e382]/45 px-1.5 py-0.5 text-xs font-medium text-[#8a1f1f]">
                             INVERTED
                           </span>
                         )}
@@ -349,14 +356,14 @@ export default function MacroPage() {
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="overflow-hidden">
+                <Card className={`${panelClass} overflow-hidden`}>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        <Activity className="w-5 h-5 text-primary" />
+                        <Activity className="h-5 w-5 text-[#003666]" />
                         {seriesName}
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="mt-1 text-xs text-[#43474f]">
                         {INDICATOR_CONFIG[selectedSeries]?.description}
                       </p>
                     </div>
@@ -371,10 +378,10 @@ export default function MacroPage() {
                   <CardContent>
                     {seriesLoading ? (
                       <div className="flex items-center justify-center py-16">
-                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        <Loader2 className="h-6 w-6 animate-spin text-[#003666]" />
                       </div>
                     ) : seriesData.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-16">
+                      <p className="py-16 text-center text-sm text-[#43474f]">
                         No data available for this series.
                       </p>
                     ) : (
@@ -393,7 +400,7 @@ export default function MacroPage() {
                                   offset="0%"
                                   stopColor={
                                     INDICATOR_CONFIG[selectedSeries]?.color ||
-                                    "hsl(221, 83%, 53%)"
+                                    "#003666"
                                   }
                                   stopOpacity={0.3}
                                 />
@@ -401,15 +408,15 @@ export default function MacroPage() {
                                   offset="100%"
                                   stopColor={
                                     INDICATOR_CONFIG[selectedSeries]?.color ||
-                                    "hsl(221, 83%, 53%)"
+                                    "#003666"
                                   }
                                   stopOpacity={0.0}
                                 />
                               </linearGradient>
                             </defs>
                             <CartesianGrid
+                              stroke="#e0e0e0"
                               strokeDasharray="3 3"
-                              opacity={0.15}
                             />
                             <XAxis
                               dataKey="date"
@@ -422,8 +429,8 @@ export default function MacroPage() {
                               contentStyle={{
                                 borderRadius: "8px",
                                 fontSize: "12px",
-                                border: "1px solid hsl(var(--border))",
-                                background: "hsl(var(--card))",
+                                border: "1px solid #e0e0e0",
+                                background: "#ffffff",
                               }}
                               labelStyle={{ fontWeight: 600 }}
                             />
@@ -432,7 +439,7 @@ export default function MacroPage() {
                               dataKey="value"
                               stroke={
                                 INDICATOR_CONFIG[selectedSeries]?.color ||
-                                "hsl(221, 83%, 53%)"
+                                "#003666"
                               }
                               strokeWidth={2}
                               fill="url(#chartGradient)"
@@ -466,7 +473,7 @@ export default function MacroPage() {
               return (
                 <motion.div key={seriesId} variants={itemVariants}>
                   <Card
-                    className="hover:shadow-lg hover:border-primary/30 transition-all duration-300 cursor-pointer group"
+                    className="group cursor-pointer border-[#e0e0e0] bg-white transition-all duration-300 hover:-translate-y-0.5 hover:border-[#003666] hover:shadow-[0_20px_20px_rgba(0,0,0,0.06)]"
                     onClick={() => fetchSeries(seriesId)}
                   >
                     <CardContent className="p-5">
@@ -475,21 +482,19 @@ export default function MacroPage() {
                           <div
                             className="w-10 h-10 rounded-lg flex items-center justify-center"
                             style={{
-                              backgroundColor: config
-                                ? `${config.color}20`
-                                : "hsl(var(--accent))",
+                              backgroundColor: config ? `${config.color}20` : "#f9f9fe",
                             }}
                           >
                             <IconComponent
-                              className="w-5 h-5"
+                              className="h-5 w-5"
                               style={{ color: config?.color }}
                             />
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-foreground">
+                            <p className="text-sm font-semibold text-[#002141]">
                               {ind.name}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-[#43474f]">
                               {seriesId}
                             </p>
                           </div>
@@ -498,7 +503,7 @@ export default function MacroPage() {
 
                       <div className="flex items-end justify-between">
                         <div>
-                          <p className="text-2xl font-bold text-foreground">
+                          <p className="text-2xl font-semibold text-[#002141]">
                             {ind.value !== undefined
                               ? ind.value >= 1000
                                 ? `${(ind.value / 1000).toFixed(1)}T`
@@ -507,12 +512,12 @@ export default function MacroPage() {
                             {config?.unit &&
                               ind.value !== undefined &&
                               ind.value < 1000 && (
-                                <span className="text-sm font-normal text-muted-foreground ml-0.5">
+                                <span className="ml-0.5 text-sm font-normal text-[#43474f]">
                                   {config.unit}
                                 </span>
                               )}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="mt-0.5 text-xs text-[#43474f]">
                             as of {ind.date}
                           </p>
                         </div>
@@ -521,16 +526,16 @@ export default function MacroPage() {
                           <div
                             className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${
                               isUp
-                                ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                                ? "bg-green-500/10 text-green-600"
                                 : isDown
-                                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                                  : "bg-secondary text-muted-foreground"
+                                  ? "bg-[#f7e382]/45 text-[#8a1f1f]"
+                                  : "bg-[#eeedf2] text-[#43474f]"
                             }`}
                           >
                             {isUp ? (
-                              <ArrowUpRight className="w-3 h-3" />
+                              <ArrowUpRight className="h-3 w-3" />
                             ) : isDown ? (
-                              <ArrowDownRight className="w-3 h-3" />
+                              <ArrowDownRight className="h-3 w-3" />
                             ) : null}
                             {ind.change_1m > 0 ? "+" : ""}
                             {ind.change_1m.toFixed(2)}%
@@ -538,7 +543,7 @@ export default function MacroPage() {
                         )}
                       </div>
 
-                      <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                      <p className="mt-3 text-xs leading-relaxed text-[#43474f]">
                         {config?.description}
                       </p>
                     </CardContent>
@@ -554,17 +559,17 @@ export default function MacroPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
           >
-            <Card className="bg-primary/5 border-primary/20">
+            <Card className={insightPanelClass}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Activity className="w-4 h-4 text-primary" />
+                  <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#7aa0d6]/20">
+                    <Activity className="h-4 w-4 text-[#003666]" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-sm font-semibold text-[#002141]">
                       How FRED data improves your predictions
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    <p className="mt-1 text-xs leading-relaxed text-[#43474f]">
                       These macroeconomic indicators are automatically merged
                       into the XGBoost model as additional features. For
                       example, the Federal Funds Rate impacts growth stocks
@@ -574,7 +579,7 @@ export default function MacroPage() {
                       predictors — when it inverts, XGBoost adjusts its risk
                       estimates accordingly.
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="mt-2 text-xs text-[#43474f]">
                       Learn:{" "}
                       <Term context="Macro dashboard explanation">
                         volatility
@@ -588,13 +593,13 @@ export default function MacroPage() {
                         recession
                       </Term>
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="mt-2 text-xs text-[#43474f]">
                       Data source:{" "}
                       <a
                         href="https://fred.stlouisfed.org/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline"
+                        className="text-[#003666] hover:underline"
                       >
                         Federal Reserve Economic Data (FRED)
                       </a>

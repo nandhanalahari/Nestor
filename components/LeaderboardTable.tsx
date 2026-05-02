@@ -101,30 +101,30 @@ function levelTierClasses(level: number): {
   if (lv >= 7) {
     return {
       avatarRing:
-        "leaderboard-gold-ring-shimmer bg-gradient-to-br from-amber-300 via-yellow-200 to-amber-500 p-[2px]",
+        "leaderboard-gold-ring-shimmer bg-[#f7e382] p-[2px]",
       badgeClass:
-        "border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100",
+        "border-[#f7e382] bg-[#fffbe8] text-[#002141]",
     };
   }
   if (lv >= 5) {
     return {
-      avatarRing: "ring-2 ring-foreground/80 ring-offset-2 ring-offset-background",
+      avatarRing: "ring-2 ring-[#002141]/80 ring-offset-2 ring-offset-white",
       badgeClass:
-        "border-foreground/30 bg-foreground/10 text-foreground",
+        "border-[#002141]/30 bg-[#eef4fb] text-[#002141]",
     };
   }
   if (lv >= 3) {
     return {
-      avatarRing: "ring-2 ring-primary/90 ring-offset-2 ring-offset-background",
+      avatarRing: "ring-2 ring-[#7aa0d6] ring-offset-2 ring-offset-white",
       badgeClass:
-        "border-primary/45 bg-primary/12 text-foreground",
+        "border-[#7aa0d6] bg-[#eef4fb] text-[#002141]",
     };
   }
   return {
     avatarRing:
-      "ring-2 ring-zinc-300 ring-offset-2 ring-offset-background dark:ring-zinc-600",
+      "ring-2 ring-[#d7dce5] ring-offset-2 ring-offset-white",
     badgeClass:
-      "border-zinc-400/40 bg-zinc-500/10 text-zinc-800 dark:text-zinc-200",
+      "border-[#d7dce5] bg-white text-[#3f5165]",
   };
 }
 
@@ -195,13 +195,13 @@ function XpProgressCell({ row }: { row: LeaderboardRow }) {
       <Progress
         value={pct}
         className={cn(
-          "h-1.5 flex-1",
+          "h-1.5 flex-1 bg-[#eef4fb] [&_[data-slot=progress-indicator]]:bg-[#003666]",
           "[&_[data-slot=progress-indicator]]:transition-transform",
           "[&_[data-slot=progress-indicator]]:duration-[600ms]",
           "[&_[data-slot=progress-indicator]]:ease-in-out",
         )}
       />
-      <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">
+      <span className="shrink-0 text-xs font-semibold tabular-nums text-[#002141]">
         {row.totalXp.toLocaleString()}
       </span>
     </div>
@@ -287,35 +287,35 @@ export function LeaderboardTable({
     !isLoading && !error && totalPlayers < 3;
 
   return (
-    <div className="relative space-y-4 pb-28">
+    <div className="relative space-y-4 pb-28 font-[Inter] text-[#002141]">
       {demoFill ? (
-        <p className="rounded-md border border-dashed border-primary/25 bg-primary/[0.06] px-3 py-2 text-xs text-muted-foreground dark:bg-primary/[0.09]">
+        <p className="rounded-lg border border-dashed border-[#7aa0d6] bg-[#eef4fb] px-3 py-2 text-xs text-[#3f5165]">
           Sample investors are shown until at least three real players have XP.
           Rankings and streaks are illustrative.
         </p>
       ) : null}
       {showSparseEmpty ? (
-        <div className="rounded-lg border border-border bg-muted/20 px-6 py-12 text-center">
-          <p className="mx-auto max-w-md text-sm leading-relaxed text-muted-foreground">
+        <div className="rounded-lg border border-[#e0e0e0] bg-white px-6 py-12 text-center shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+          <p className="mx-auto max-w-md text-sm leading-relaxed text-[#3f5165]">
             Be the first on the board — complete a Trading School lesson to earn
             XP.
           </p>
         </div>
       ) : (
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-hidden rounded-lg border border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <Table>
             <TableHeader>
-              <TableRow className="border-b hover:bg-transparent">
-                <TableHead className="w-11 md:w-14">#</TableHead>
-                <TableHead>Player</TableHead>
-                <TableHead className="w-[120px] md:w-[132px]">Tier</TableHead>
-                <TableHead className="hidden w-14 text-center md:table-cell">
+              <TableRow className="border-b border-[#e0e0e0] bg-[#f9f9fe] hover:bg-[#f9f9fe]">
+                <TableHead className="w-11 text-[#3f5165] md:w-14">#</TableHead>
+                <TableHead className="text-[#3f5165]">Player</TableHead>
+                <TableHead className="w-[120px] text-[#3f5165] md:w-[132px]">Tier</TableHead>
+                <TableHead className="hidden w-14 text-center text-[#3f5165] md:table-cell">
                   Honor
                 </TableHead>
-                <TableHead className="hidden md:table-cell md:min-w-[200px]">
+                <TableHead className="hidden text-[#3f5165] md:table-cell md:min-w-[200px]">
                   Level progress
                 </TableHead>
-                <TableHead className="hidden text-right md:table-cell md:w-24">
+                <TableHead className="hidden text-right text-[#3f5165] md:table-cell md:w-24">
                   This week
                 </TableHead>
               </TableRow>
@@ -325,10 +325,7 @@ export function LeaderboardTable({
                 <SkeletonGrid />
               ) : error ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="py-10 text-center text-destructive"
-                  >
+                  <TableCell colSpan={6} className="py-10 text-center text-red-700">
                     {error.message}
                   </TableCell>
                 </TableRow>
@@ -336,7 +333,7 @@ export function LeaderboardTable({
                 <TableRow>
                   <TableCell
                     colSpan={6}
-                    className="py-10 text-center text-muted-foreground"
+                    className="py-10 text-center text-[#3f5165]"
                   >
                     No players yet. Be the first on the board.
                   </TableCell>
@@ -345,7 +342,7 @@ export function LeaderboardTable({
                 <TableRow>
                   <TableCell
                     colSpan={6}
-                    className="py-10 text-center text-muted-foreground"
+                    className="py-10 text-center text-[#3f5165]"
                   >
                     No players match your search.
                   </TableCell>
@@ -359,8 +356,8 @@ export function LeaderboardTable({
                     <TableRow
                       key={row.userId}
                       className={cn(
-                        "leaderboard-row-enter border-b",
-                        isYou && "bg-primary/[0.06] dark:bg-primary/[0.12]",
+                        "leaderboard-row-enter border-b border-[#eef0f4]",
+                        isYou && "bg-[#eef4fb]",
                       )}
                       style={{ animationDelay: `${Math.min(i, 24) * 48}ms` }}
                     >
@@ -381,7 +378,7 @@ export function LeaderboardTable({
                               tier.avatarRing,
                             )}
                           >
-                            <Avatar className="size-9 border-2 border-background md:size-10">
+                            <Avatar className="size-9 border-2 border-white md:size-10">
                               {row.avatarUrl ? (
                                 <AvatarImage src={row.avatarUrl} alt="" />
                               ) : null}
@@ -392,12 +389,12 @@ export function LeaderboardTable({
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="truncate font-medium text-foreground">
+                              <span className="truncate font-medium text-[#002141]">
                                 {row.displayName}
                               </span>
                               {row.lessonStreak != null && row.lessonStreak > 0 ? (
                                 <span
-                                  className="shrink-0 text-[10px] font-semibold tabular-nums text-orange-600 dark:text-orange-400"
+                                  className="shrink-0 text-[10px] font-semibold tabular-nums text-[#8b6f00]"
                                   title="Lesson streak (sample data)"
                                 >
                                   🔥 {row.lessonStreak}d
@@ -406,7 +403,7 @@ export function LeaderboardTable({
                               {isYou ? (
                                 <Badge
                                   variant="outline"
-                                  className="h-5 rounded-full border-primary/40 bg-primary/10 px-2 text-[10px] font-bold uppercase tracking-wide text-primary"
+                                  className="h-5 rounded-full border-[#7aa0d6] bg-[#eef4fb] px-2 text-[10px] font-bold uppercase tracking-wide text-[#003666]"
                                 >
                                   You
                                 </Badge>
@@ -432,7 +429,7 @@ export function LeaderboardTable({
                             <TooltipTrigger asChild>
                               <button
                                 type="button"
-                                className="flex size-9 cursor-default items-center justify-center rounded-md border border-border/80 bg-muted/40 text-lg leading-none transition-colors hover:bg-muted"
+                                className="flex size-9 cursor-default items-center justify-center rounded-md border border-[#e0e0e0] bg-[#f9f9fe] text-lg leading-none transition-colors hover:bg-[#eef4fb]"
                                 aria-label={badge.label}
                               >
                                 <span aria-hidden>{badge.emoji}</span>
@@ -446,7 +443,7 @@ export function LeaderboardTable({
                         <XpProgressCell row={row} />
                       </TableCell>
                       <TableCell className="hidden align-middle text-right md:table-cell">
-                        <span className="text-xs tabular-nums text-muted-foreground">
+                        <span className="text-xs tabular-nums text-[#3f5165]">
                           {row.xpThisWeek.toLocaleString()}
                         </span>
                       </TableCell>
@@ -462,7 +459,7 @@ export function LeaderboardTable({
       {/* Sticky “You” summary */}
       <div
         className={cn(
-          "fixed bottom-0 left-0 right-0 z-40 border-t-2 border-primary bg-background/95 backdrop-blur-md shadow-[0_-12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_-12px_40px_rgba(0,0,0,0.35)]",
+          "fixed bottom-0 left-0 right-0 z-40 border-t border-[#e0e0e0] bg-white/95 backdrop-blur-md shadow-[0_-12px_40px_rgba(0,0,0,0.08)]",
           "md:left-64",
           "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
         )}
@@ -471,19 +468,19 @@ export function LeaderboardTable({
       >
         <div className="mx-auto max-w-5xl px-4 py-3 md:px-8">
           {!isLoading && error ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[#3f5165]">
               Could not load your rank.
             </p>
           ) : you ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="rounded-md bg-primary/15 px-2 py-1 text-xs font-bold uppercase tracking-wide text-primary">
+                <span className="rounded-md bg-[#f7e382] px-2 py-1 text-xs font-bold uppercase tracking-wide text-[#002141]">
                   You
                 </span>
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-0 text-sm text-muted-foreground">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0 text-sm text-[#3f5165]">
                   <span>
                     Rank{" "}
-                    <span className="font-semibold tabular-nums text-foreground">
+                    <span className="font-semibold tabular-nums text-[#002141]">
                       #{you.rank.toLocaleString()}
                     </span>
                   </span>
@@ -497,7 +494,7 @@ export function LeaderboardTable({
               </div>
               <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
                 <span>
-                  <span className="text-muted-foreground">
+                  <span className="text-[#3f5165]">
                     {mode === "weekly" ? "Weekly XP" : "Total XP"}
                     {": "}
                   </span>
@@ -508,16 +505,16 @@ export function LeaderboardTable({
                   </span>
                 </span>
                 <span>
-                  <span className="text-muted-foreground">Level: </span>
+                  <span className="text-[#3f5165]">Level: </span>
                   <span className="font-semibold tabular-nums">{you.level}</span>
                   <span className="text-muted-foreground"> · </span>
-                  <span className="font-medium text-primary">
+                  <span className="font-medium text-[#003666]">
                     {you.levelLabel}
                   </span>
                 </span>
                 {you.lessonStreak != null && you.lessonStreak > 0 ? (
-                  <span className="text-orange-600 dark:text-orange-400">
-                    <span className="text-muted-foreground">Streak: </span>
+                  <span className="text-[#8b6f00]">
+                    <span className="text-[#3f5165]">Streak: </span>
                     <span className="font-semibold tabular-nums">
                       🔥 {you.lessonStreak}d
                     </span>
@@ -526,7 +523,7 @@ export function LeaderboardTable({
               </div>
             </div>
           ) : !isLoading ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[#3f5165]">
               You&apos;re not on the leaderboard yet — earn XP to get ranked.
             </p>
           ) : (

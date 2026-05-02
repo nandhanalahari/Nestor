@@ -109,14 +109,14 @@ export function GoalProjection({
 
   if (!monthlySavingsTarget) {
     return (
-      <div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-[#e0e0e0] border-l-4 border-l-[#f7e382] bg-white p-4 shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
         <div className="flex items-start gap-3">
-          <PiggyBank className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+          <PiggyBank className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#003666]" />
           <div>
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-medium text-[#002141]">
               Add a monthly savings target to project this goal.
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[#43474f]">
               We will use it with your risk profile and portfolio value.
             </p>
           </div>
@@ -129,20 +129,21 @@ export function GoalProjection({
             placeholder="Monthly savings ($)"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
+            className="border-[#e0e0e0] bg-white text-[#1a1c1f] focus-visible:ring-[#7aa0d6]/40"
           />
-          <Button onClick={saveMonthlyTarget} disabled={saving} className="gap-2">
+          <Button onClick={saveMonthlyTarget} disabled={saving} className="gap-2 bg-[#002141] hover:bg-[#003666]">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             Save
           </Button>
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-[#8a1f1f]">{error}</p>}
       </div>
     )
   }
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-accent p-4 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 rounded-lg border border-[#e0e0e0] bg-white p-4 text-sm text-[#43474f] shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
         <Loader2 className="h-4 w-4 animate-spin" />
         Calculating projection...
       </div>
@@ -150,7 +151,7 @@ export function GoalProjection({
   }
 
   if (error) {
-    return <p className="rounded-lg bg-accent p-4 text-sm text-muted-foreground">{error}</p>
+    return <p className="rounded-lg border border-[#e0e0e0] bg-white p-4 text-sm text-[#8a1f1f] shadow-[0_20px_20px_rgba(0,0,0,0.04)]">{error}</p>
   }
 
   if (!projection) return null
@@ -163,12 +164,12 @@ export function GoalProjection({
         : `Projected for ${formatDate(projection.projected_date)}.`
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg bg-accent p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-[#e0e0e0] bg-white p-4 shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
       <div className="flex items-start gap-3">
-        <CalendarClock className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+        <CalendarClock className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#003666]" />
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">{projectionCopy}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm font-medium text-[#002141]">{projectionCopy}</p>
+          <p className="text-sm text-[#43474f]">
             Assumes {formatCurrency(projection.monthly_savings_target)}/mo and{" "}
             {(projection.annual_return_assumption * 100).toFixed(0)}% annual growth for{" "}
             {projection.profile_label}.
@@ -178,14 +179,14 @@ export function GoalProjection({
 
       {projection.on_track === false && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-[#43474f]">
             To hit the target date, aim for{" "}
             {projection.monthly_needed_to_be_on_time === null
               ? "a higher monthly contribution"
               : `${formatCurrency(projection.monthly_needed_to_be_on_time)}/mo`}
             .
           </p>
-          <Button asChild variant="outline" size="sm" className="gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2 border-[#e0e0e0] bg-white text-[#002141] hover:bg-[#f9f9fe]">
             <Link href="/scenarios">
               <TrendingUp className="h-4 w-4" />
               Try scenarios

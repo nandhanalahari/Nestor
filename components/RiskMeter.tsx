@@ -77,9 +77,9 @@ export function RiskMeter({
 
   // Color based on score
   const getColor = (s: number) => {
-    if (s <= 33) return { main: "#7399c6", glow: "rgba(115, 153, 198, 0.3)" }; // Goldman Sachs blue for steady
-    if (s <= 66) return { main: "#f59e0b", glow: "rgba(245, 158, 11, 0.3)" }; // Amber for balanced
-    return { main: "#10b981", glow: "rgba(16, 185, 129, 0.3)" }; // Green for bold
+    if (s <= 33) return { main: "#7aa0d6", glow: "rgba(122, 160, 214, 0.25)" };
+    if (s <= 66) return { main: "#d9c95f", glow: "rgba(247, 227, 130, 0.35)" };
+    return { main: "#003666", glow: "rgba(0, 54, 102, 0.24)" };
   };
 
   const color = getColor(score);
@@ -88,7 +88,7 @@ export function RiskMeter({
   const startAngle = 135; // degrees
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-3 font-sans">
       <div className="relative" style={{ width: size, height: size }}>
         <svg
           width={size}
@@ -107,7 +107,7 @@ export function RiskMeter({
             strokeDasharray={`${totalArc} ${circumference - totalArc}`}
             strokeDashoffset={0}
             strokeLinecap="round"
-            className="text-muted/30"
+            className="text-[#eeedf2]"
             transform={`rotate(${startAngle} ${size / 2} ${size / 2})`}
           />
 
@@ -135,13 +135,13 @@ export function RiskMeter({
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
-            className="font-bold text-foreground"
+            className="font-display font-extrabold text-[#002141]"
             style={{ fontSize: size * 0.22 }}
           >
             {displayScore}
           </span>
           <span
-            className="text-muted-foreground font-medium"
+            className="font-medium text-[#6b7280]"
             style={{ fontSize: size * 0.07 }}
           >
             / 100
@@ -153,20 +153,20 @@ export function RiskMeter({
         <div className="flex w-full max-w-[min(100%,280px)] flex-col items-center gap-1.5 px-1">
           {portfolioData.scoreDelta !== null ? (
             portfolioData.scoreDelta > 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-semibold text-green-600 dark:text-green-400">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#bfe4cc] bg-[#e9f6ef] px-2.5 py-0.5 text-xs font-semibold text-[#146c43]">
                 ↑ {portfolioData.scoreDelta} this week
               </span>
             ) : portfolioData.scoreDelta < 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#fecdd3] bg-[#fff1f2] px-2.5 py-0.5 text-xs font-semibold text-[#9f1239]">
                 ↓ {Math.abs(portfolioData.scoreDelta)} this week
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#e0e0e0] bg-[#f4f6fa] px-2.5 py-0.5 text-xs font-medium text-[#43474f]">
                 — No change
               </span>
             )
           ) : null}
-          <p className="text-center text-[11px] text-muted-foreground">
+          <p className="text-center text-[11px] text-[#6b7280]">
             Weekly best:{" "}
             {portfolioData.weeklyHigh !== null &&
             portfolioData.weeklyHigh !== undefined
@@ -184,7 +184,7 @@ export function RiskMeter({
           className="text-center"
         >
           <p
-            className="text-lg font-semibold text-foreground"
+            className="font-display text-lg font-semibold text-[#002141]"
             style={{ color: color.main }}
           >
             {label}

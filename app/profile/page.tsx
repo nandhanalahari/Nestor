@@ -35,7 +35,17 @@ const PROFILE_STORAGE_KEY = "nestor_user_profile";
 // What this profile means for portfolio strategy
 const PROFILE_STRATEGY: Record<
   ProfileLabel,
-  { items: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }[] }
+  {
+    items: {
+      icon: React.ComponentType<{
+        className?: string;
+        style?: React.CSSProperties;
+      }>;
+      label: string;
+      value: string;
+      color: string;
+    }[];
+  }
 > = {
   "Steady Builder": {
     items: [
@@ -149,33 +159,33 @@ export default function ProfilePage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="-mx-4 -my-8 flex min-h-screen items-center justify-center bg-[#f9f9fe] md:-mx-8">
+        <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="max-w-lg mx-auto py-16 text-center space-y-6">
+      <div className="-mx-4 -my-8 min-h-screen bg-[#f9f9fe] px-4 py-16 font-[Inter] text-[#002141] md:-mx-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-4"
+          className="mx-auto max-w-lg space-y-4 rounded-lg border border-[#e0e0e0] bg-white p-8 text-center shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
         >
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-            <Target className="w-8 h-8 text-primary" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-[#f7e382]">
+            <Target className="h-8 w-8 text-[#002141]" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="font-[Manrope] text-2xl font-bold text-[#002141]">
             No investor profile yet
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-[#3f5165]">
             Take a quick quiz so Nestor can personalize your experience.
           </p>
           <Button
             size="lg"
             onClick={() => router.push("/onboarding")}
-            className="gap-2"
+            className="gap-2 bg-[#002141] text-white hover:bg-[#003666]"
           >
             Take the Quiz
             <ArrowRight className="w-4 h-4" />
@@ -190,15 +200,19 @@ export default function ProfilePage() {
   const answerKeys = ["q1_horizon", "q2_risk", "q3_liquidity", "q4_goal"] as const;
 
   return (
-    <div className="max-w-5xl mx-auto py-8 space-y-8">
+    <div className="-mx-4 -my-8 min-h-screen bg-[#f9f9fe] px-4 py-10 font-[Inter] text-[#002141] md:-mx-8 md:px-8">
+    <div className="mx-auto max-w-6xl space-y-8">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-1"
+        className="rounded-lg border border-[#e0e0e0] bg-white p-6 shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
       >
-        <h1 className="text-3xl font-bold text-foreground">My Investor Profile</h1>
-        <p className="text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7aa0d6]">
+          Account Dashboard
+        </p>
+        <h1 className="mt-3 font-[Manrope] text-3xl font-bold tracking-tight text-[#002141]">My Investor Profile</h1>
+        <p className="mt-1 text-[#3f5165]">
           Your personalized investment strategy based on your quiz results
         </p>
       </motion.div>
@@ -211,27 +225,27 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="border-2 overflow-hidden h-full">
-            <div className="bg-gradient-to-br from-primary/5 via-primary/8 to-primary/15 p-6 h-full">
+          <Card className="h-full overflow-hidden border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+            <div className="h-full bg-white p-6">
               <div className="flex flex-col items-center text-center gap-4">
                 <div className="text-5xl">{profileInfo.emoji}</div>
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7aa0d6]">
                     Your Profile Type
                   </p>
-                  <h2 className="text-2xl font-bold text-foreground">
+                  <h2 className="font-[Manrope] text-2xl font-bold text-[#002141]">
                     {profile.profile_label}
                   </h2>
-                  <p className="text-primary font-semibold">
+                  <p className="font-semibold text-[#003666]">
                     {profileInfo.tagline}
                   </p>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm leading-relaxed text-[#3f5165]">
                   {profileInfo.description}
                 </p>
 
                 {/* Highlights */}
-                <div className="border-t border-border/50 pt-4 mt-1 w-full space-y-3">
+                <div className="mt-1 w-full space-y-3 border-t border-[#e0e0e0] pt-4">
                   {profileInfo.highlights.map((highlight, i) => (
                     <motion.div
                       key={i}
@@ -240,10 +254,10 @@ export default function ProfilePage() {
                       transition={{ delay: 0.3 + i * 0.1 }}
                       className="flex items-start gap-3 text-left"
                     >
-                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                      <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#f7e382]">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-[#002141]" />
                       </div>
-                      <p className="text-sm text-foreground">{highlight}</p>
+                      <p className="text-sm text-[#002141]">{highlight}</p>
                     </motion.div>
                   ))}
                 </div>
@@ -260,7 +274,7 @@ export default function ProfilePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
           >
-            <h3 className="text-lg font-semibold text-foreground mb-3">At a Glance</h3>
+            <h3 className="mb-3 font-[Manrope] text-lg font-semibold text-[#002141]">At a Glance</h3>
             <div className="grid grid-cols-3 gap-3">
               {[
                 {
@@ -289,10 +303,10 @@ export default function ProfilePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 + i * 0.05 }}
                 >
-                  <Card className="p-4 text-center h-full">
-                    <Icon className="w-5 h-5 text-primary mx-auto mb-2" />
-                    <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                    <p className="text-sm font-bold text-foreground mt-1">{value}</p>
+                  <Card className="h-full border-[#e0e0e0] bg-white p-4 text-center shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+                    <Icon className="mx-auto mb-2 h-5 w-5 text-[#003666]" />
+                    <p className="text-xs font-medium text-[#3f5165]">{label}</p>
+                    <p className="mt-1 text-sm font-bold text-[#002141]">{value}</p>
                   </Card>
                 </motion.div>
               ))}
@@ -305,10 +319,10 @@ export default function ProfilePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
           >
-            <Card>
+            <Card className="border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Info className="w-5 h-5 text-primary" />
+                <CardTitle className="flex items-center gap-2 font-[Manrope] text-lg text-[#002141]">
+                  <Info className="h-5 w-5 text-[#003666]" />
                   What This Means for Your Portfolio
                 </CardTitle>
               </CardHeader>
@@ -319,7 +333,7 @@ export default function ProfilePage() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.3 + i * 0.05 }}
-                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex items-start gap-3 rounded-lg p-3 transition-colors hover:bg-[#eef4fb]"
                   >
                     <div
                       className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -328,10 +342,10 @@ export default function ProfilePage() {
                       <Icon className="w-4 h-4" style={{ color }} />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7a8797]">
                         {label}
                       </p>
-                      <p className="font-medium text-foreground mt-0.5">{value}</p>
+                      <p className="mt-0.5 font-medium text-[#002141]">{value}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -347,9 +361,9 @@ export default function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
-        <Card>
+        <Card className="border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <CardHeader>
-            <CardTitle className="text-lg">Your Answers</CardTitle>
+            <CardTitle className="font-[Manrope] text-lg text-[#002141]">Your Answers</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {QUIZ_QUESTIONS.map((question, idx) => {
@@ -364,20 +378,20 @@ export default function ProfilePage() {
               return (
                 <div
                   key={question.id}
-                  className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card"
+                  className="flex items-start gap-3 rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-4"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <CategoryIcon className="w-5 h-5 text-primary" />
+                  <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#eef4fb]">
+                    <CategoryIcon className="h-5 w-5 text-[#003666]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground leading-snug">
+                    <p className="text-sm leading-snug text-[#3f5165]">
                       {question.title}
                     </p>
-                    <p className="font-semibold text-foreground mt-1 text-lg">
+                    <p className="mt-1 text-lg font-semibold text-[#002141]">
                       {matchedOption?.label ?? "—"}
                     </p>
                     {matchedOption?.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="mt-0.5 text-xs text-[#3f5165]">
                         {matchedOption.description}
                       </p>
                     )}
@@ -400,7 +414,7 @@ export default function ProfilePage() {
           variant="outline"
           size="lg"
           onClick={() => router.push("/onboarding")}
-          className="gap-2"
+          className="gap-2 border-[#d7dce5] bg-white text-[#002141] shadow-[0_20px_20px_rgba(0,0,0,0.04)] hover:bg-[#eef4fb] hover:text-[#003666]"
         >
           <RefreshCw className="w-4 h-4" />
           Retake Quiz
@@ -408,12 +422,13 @@ export default function ProfilePage() {
         <Button
           size="lg"
           onClick={() => router.push("/dashboard")}
-          className="gap-2"
+          className="gap-2 bg-[#002141] text-white shadow-[0_20px_20px_rgba(0,0,0,0.04)] hover:bg-[#003666]"
         >
           Go to Dashboard
           <ArrowRight className="w-4 h-4" />
         </Button>
       </motion.div>
+    </div>
     </div>
   );
 }

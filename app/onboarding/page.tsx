@@ -204,8 +204,8 @@ export default function OnboardingPage() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex items-center justify-center -m-8 bg-gradient-to-br from-background via-background to-primary/5 overflow-hidden">
-      <div className="w-full max-w-xl px-4">
+    <div className="-m-8 flex min-h-screen items-center justify-center overflow-hidden bg-[#f9f9fe] px-4 py-10 font-[Inter] text-[#002141]">
+      <div className="w-full max-w-2xl">
         <AnimatePresence mode="wait" custom={direction}>
           {step === "welcome" && <WelcomeScreen onStart={() => setStep("quiz")} />}
 
@@ -250,25 +250,25 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.5 }}
-      className="text-center space-y-8"
+      className="space-y-8 rounded-lg border border-[#e0e0e0] bg-white p-8 text-center shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
     >
       {/* Logo */}
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
-        className="w-20 h-20 bg-primary rounded-3xl flex items-center justify-center mx-auto shadow-lg"
+        className="mx-auto flex h-20 w-20 items-center justify-center rounded-lg bg-[#002141] shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
       >
-        <TrendingUp className="w-10 h-10 text-primary-foreground" />
+        <TrendingUp className="h-10 w-10 text-white" />
       </motion.div>
 
       <motion.div {...fadeUp} transition={{ delay: 0.2 }} className="space-y-3">
-        <h1 className="text-4xl font-bold text-foreground tracking-tight">
+        <h1 className="font-[Manrope] text-4xl font-bold tracking-tight text-[#002141]">
           Let&apos;s build your
           <br />
-          <span className="text-primary">investor profile</span>
+          <span className="text-[#003666]">investor profile</span>
         </h1>
-        <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed">
+        <p className="mx-auto max-w-md text-lg leading-relaxed text-[#3f5165]">
           Answer 4 quick questions so Nestor can tailor everything to you.
           No jargon, no wrong answers.
         </p>
@@ -290,12 +290,12 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 + i * 0.1 }}
-            className="flex items-center gap-3 text-left"
+            className="flex items-center gap-3 rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-3 text-left"
           >
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Icon className="w-5 h-5 text-primary" />
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#eef4fb]">
+              <Icon className="h-5 w-5 text-[#003666]" />
             </div>
-            <span className="text-foreground font-medium">{text}</span>
+            <span className="font-medium text-[#002141]">{text}</span>
           </motion.div>
         ))}
       </motion.div>
@@ -304,12 +304,12 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
         <Button
           size="lg"
           onClick={onStart}
-          className="gap-2 px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-shadow"
+          className="gap-2 rounded-lg bg-[#002141] px-8 py-6 text-lg text-white shadow-[0_20px_20px_rgba(0,0,0,0.04)] transition-colors hover:bg-[#003666]"
         >
           Get Started
           <ArrowRight className="w-5 h-5" />
         </Button>
-        <p className="text-xs text-muted-foreground mt-3">
+        <p className="mt-3 text-xs text-[#3f5165]">
           Takes about 1 minute
         </p>
       </motion.div>
@@ -354,19 +354,19 @@ function QuizStep({
       animate="center"
       exit="exit"
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="space-y-6"
+      className="space-y-6 rounded-lg border border-[#e0e0e0] bg-white p-6 shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
     >
       {/* Progress bar */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex items-center justify-between text-sm text-[#3f5165]">
           <span className="font-medium">{question.category}</span>
           <span>
             {questionIdx + 1} of {total}
           </span>
         </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div className="h-2 overflow-hidden rounded-full bg-[#eef4fb]">
           <motion.div
-            className="h-full bg-primary rounded-full"
+            className="h-full rounded-full bg-[#003666]"
             initial={{ width: `${(questionIdx / total) * 100}%` }}
             animate={{ width: `${((questionIdx + 1) / total) * 100}%` }}
             transition={{ duration: 0.4, ease: "easeOut" }}
@@ -376,13 +376,13 @@ function QuizStep({
 
       {/* Question */}
       <div className="space-y-2">
-        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <IconComponent className="w-6 h-6 text-primary" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f7e382]">
+          <IconComponent className="h-6 w-6 text-[#002141]" />
         </div>
-        <h2 className="text-2xl font-bold text-foreground leading-tight">
+        <h2 className="font-[Manrope] text-2xl font-bold leading-tight text-[#002141]">
           {question.title}
         </h2>
-        <p className="text-muted-foreground">{question.subtitle}</p>
+        <p className="text-[#3f5165]">{question.subtitle}</p>
       </div>
 
       {/* Options */}
@@ -397,12 +397,12 @@ function QuizStep({
               transition={{ delay: optIdx * 0.08 }}
               onClick={() => onSelect(optIdx, option.value)}
               className={`
-                w-full text-left p-4 rounded-xl border-2 transition-all duration-200
-                hover:border-primary/50 hover:bg-primary/5 active:scale-[0.98]
+                w-full rounded-lg border p-4 text-left transition-all duration-200
+                hover:border-[#7aa0d6] hover:bg-[#eef4fb] active:scale-[0.98]
                 ${
                   isSelected
-                    ? "border-primary bg-primary/10 shadow-md shadow-primary/10"
-                    : "border-border bg-card"
+                    ? "border-[#003666] bg-[#eef4fb] shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+                    : "border-[#e0e0e0] bg-white"
                 }
               `}
             >
@@ -410,12 +410,12 @@ function QuizStep({
                 {/* Selection indicator */}
                 <div
                   className={`
-                    w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                    flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2
                     transition-all duration-200
                     ${
                       isSelected
-                        ? "border-primary bg-primary"
-                        : "border-muted-foreground/30"
+                        ? "border-[#002141] bg-[#002141]"
+                        : "border-[#d7dce5]"
                     }
                   `}
                 >
@@ -425,7 +425,7 @@ function QuizStep({
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", stiffness: 400, damping: 15 }}
                     >
-                      <CheckCircle2 className="w-5 h-5 text-primary-foreground" />
+                      <CheckCircle2 className="h-5 w-5 text-white" />
                     </motion.div>
                   )}
                 </div>
@@ -433,13 +433,13 @@ function QuizStep({
                 <div className="flex-1">
                   <p
                     className={`font-semibold ${
-                      isSelected ? "text-primary" : "text-foreground"
+                      isSelected ? "text-[#003666]" : "text-[#002141]"
                     }`}
                   >
                     {option.label}
                   </p>
                   {option.description && (
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <p className="mt-0.5 text-sm text-[#3f5165]">
                       {option.description}
                     </p>
                   )}
@@ -455,7 +455,7 @@ function QuizStep({
         <Button
           variant="ghost"
           onClick={onBack}
-          className="gap-1 text-muted-foreground hover:text-foreground"
+          className="gap-1 text-[#3f5165] hover:bg-[#eef4fb] hover:text-[#002141]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
@@ -464,7 +464,7 @@ function QuizStep({
         <Button
           onClick={onNext}
           disabled={!hasSelection || submitting}
-          className="gap-2 px-6 shadow-md"
+          className="gap-2 bg-[#002141] px-6 text-white shadow-[0_20px_20px_rgba(0,0,0,0.04)] hover:bg-[#003666]"
         >
           {submitting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -503,7 +503,7 @@ function ResultScreen({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6 }}
-      className="text-center space-y-8"
+      className="space-y-8 rounded-lg border border-[#e0e0e0] bg-white p-8 text-center shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
     >
       {/* Animated emoji */}
       <motion.div
@@ -522,11 +522,11 @@ function ResultScreen({
         transition={{ delay: 0.5 }}
         className="space-y-3"
       >
-        <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#7aa0d6]">
           Your Investor Profile
         </p>
-        <h1 className="text-4xl font-bold text-foreground">{label}</h1>
-        <p className="text-primary font-semibold text-lg">{profile.tagline}</p>
+        <h1 className="font-[Manrope] text-4xl font-bold tracking-tight text-[#002141]">{label}</h1>
+        <p className="text-lg font-semibold text-[#003666]">{profile.tagline}</p>
       </motion.div>
 
       {/* Profile card */}
@@ -534,13 +534,13 @@ function ResultScreen({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
-        className="max-w-md mx-auto bg-card border-2 border-border rounded-2xl p-6 text-left space-y-4 shadow-lg"
+        className="mx-auto max-w-md space-y-4 rounded-lg border border-[#e0e0e0] bg-[#f9f9fe] p-6 text-left"
       >
-        <p className="text-muted-foreground leading-relaxed">
+        <p className="leading-relaxed text-[#3f5165]">
           {profile.description}
         </p>
 
-        <div className="border-t border-border pt-4 space-y-3">
+        <div className="space-y-3 border-t border-[#e0e0e0] pt-4">
           {profile.highlights.map((highlight, i) => (
             <motion.div
               key={i}
@@ -549,10 +549,10 @@ function ResultScreen({
               transition={{ delay: 1.0 + i * 0.15 }}
               className="flex items-start gap-3"
             >
-              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+              <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#f7e382]">
+                <CheckCircle2 className="h-3.5 w-3.5 text-[#002141]" />
               </div>
-              <p className="text-sm text-foreground">{highlight}</p>
+              <p className="text-sm text-[#002141]">{highlight}</p>
             </motion.div>
           ))}
         </div>
@@ -568,12 +568,12 @@ function ResultScreen({
         <Button
           size="lg"
           onClick={onContinue}
-          className="gap-2 px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-shadow"
+          className="gap-2 rounded-lg bg-[#002141] px-8 py-6 text-lg text-white shadow-[0_20px_20px_rgba(0,0,0,0.04)] hover:bg-[#003666]"
         >
           Go to Dashboard
           <ArrowRight className="w-5 h-5" />
         </Button>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[#3f5165]">
           You can retake this quiz anytime from your profile settings
         </p>
       </motion.div>

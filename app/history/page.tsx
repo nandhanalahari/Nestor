@@ -47,6 +47,12 @@ type StockNode = {
   weeks: Snapshot[]
 }
 
+const panelClass =
+  "border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]"
+const headingClass = "font-display text-3xl font-semibold text-[#002141]"
+const subcopyClass = "mt-2 max-w-3xl text-sm leading-6 text-[#43474f]"
+const metricLabelClass = "text-xs font-medium uppercase text-[#43474f]"
+
 export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -139,29 +145,29 @@ export default function HistoryPage() {
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 bg-[#f9f9fe] text-[#1a1c1f]">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-start justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <History className="w-8 h-8 text-primary" />
+          <h1 className={`${headingClass} flex items-center gap-3`}>
+            <History className="h-8 w-8 text-[#003666]" />
             Portfolio History
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className={subcopyClass}>
             Track your weekly profits, portfolio contributions, and stock performance over time.
           </p>
         </div>
-        <Button onClick={handleSnapshot} disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        <Button onClick={handleSnapshot} disabled={saving} className="gap-2 bg-[#002141] hover:bg-[#003666]">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {saving ? "Saving..." : "Take Snapshot"}
         </Button>
       </motion.div>
@@ -173,24 +179,24 @@ export default function HistoryPage() {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-1 md:grid-cols-3 gap-4"
       >
-        <Card>
+        <Card className={panelClass}>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Total Tracked Profit</p>
-            <p className={`text-2xl font-bold ${totalProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            <p className={metricLabelClass}>Total Tracked Profit</p>
+            <p className={`text-2xl font-semibold ${totalProfit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
               {totalProfit >= 0 ? "+" : ""}{usd.format(Math.round(totalProfit))}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={panelClass}>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Stocks Tracked</p>
-            <p className="text-2xl font-bold text-foreground">{stockTree.length}</p>
+            <p className={metricLabelClass}>Stocks Tracked</p>
+            <p className="text-2xl font-semibold text-[#002141]">{stockTree.length}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={panelClass}>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Weekly Snapshots</p>
-            <p className="text-2xl font-bold text-foreground">
+            <p className={metricLabelClass}>Weekly Snapshots</p>
+            <p className="text-2xl font-semibold text-[#002141]">
               {new Set(snapshots.map((s) => s.week_start)).size}
             </p>
           </CardContent>
@@ -199,14 +205,14 @@ export default function HistoryPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
         </div>
       ) : stockTree.length === 0 ? (
-        <Card>
+        <Card className={panelClass}>
           <CardContent className="p-12 text-center">
-            <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground">No history yet</h3>
-            <p className="text-muted-foreground mt-1">
+            <GitBranch className="mx-auto mb-4 h-12 w-12 text-[#7aa0d6]" />
+            <h3 className="font-display text-lg font-semibold text-[#002141]">No history yet</h3>
+            <p className="mt-1 text-[#43474f]">
               Click &quot;Take Snapshot&quot; to record your current portfolio state.
               Do this weekly to build your history tree.
             </p>
@@ -232,30 +238,30 @@ export default function HistoryPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.05 * idx }}
               >
-                <Card className="overflow-hidden">
+                <Card className={`${panelClass} overflow-hidden`}>
                   {/* Stock Root Node */}
                   <button
                     onClick={() => toggleStock(stock.ticker)}
-                    className="w-full text-left p-4 flex items-center gap-4 hover:bg-accent/50 transition-colors"
+                    className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-[#f9f9fe]"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-primary">{stock.ticker}</span>
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#7aa0d6]/20">
+                      <span className="text-xs font-bold text-[#003666]">{stock.ticker}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-foreground">{stock.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="font-display font-semibold text-[#002141]">{stock.name}</p>
+                      <p className="text-xs text-[#43474f]">
                         {stock.weeks.length} snapshot{stock.weeks.length !== 1 ? "s" : ""} · avg weight {stock.avgWeight.toFixed(1)}%
                       </p>
                     </div>
                     <div className="text-right mr-2">
-                      <p className={`font-semibold ${stock.totalProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                      <p className={`font-semibold ${stock.totalProfit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
                         {stock.totalProfit >= 0 ? "+" : ""}{usd.format(Math.round(stock.totalProfit))}
                       </p>
                     </div>
                     {isExpanded ? (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <ChevronDown className="h-5 w-5 flex-shrink-0 text-[#7aa0d6]" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <ChevronRight className="h-5 w-5 flex-shrink-0 text-[#7aa0d6]" />
                     )}
                   </button>
 
@@ -266,24 +272,24 @@ export default function HistoryPage() {
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="border-t"
+                        className="border-t border-[#e0e0e0]"
                       >
                         <div className="pl-8 pr-4 py-2 space-y-1">
                           {/* Branch 1: Profit History */}
                           <button
                             onClick={() => toggleBranch(profitsKey)}
-                            className="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-accent/30 transition-colors"
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#f9f9fe]"
                           >
-                            <div className="w-1 h-8 bg-green-500 rounded-full" />
-                            <DollarSign className="w-4 h-4 text-green-500" />
-                            <span className="font-medium text-sm text-foreground">Profit History</span>
-                            <span className="text-xs text-muted-foreground ml-auto mr-2">
+                            <div className="h-8 w-1 rounded-full bg-[#f7e382]" />
+                            <DollarSign className="h-4 w-4 text-[#8a5d00]" />
+                            <span className="text-sm font-medium text-[#002141]">Profit History</span>
+                            <span className="ml-auto mr-2 text-xs text-[#43474f]">
                               {stock.weeks.length} weeks
                             </span>
                             {expandedBranches.has(profitsKey) ? (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              <ChevronDown className="h-4 w-4 text-[#7aa0d6]" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              <ChevronRight className="h-4 w-4 text-[#7aa0d6]" />
                             )}
                           </button>
                           <AnimatePresence>
@@ -296,12 +302,12 @@ export default function HistoryPage() {
                               >
                                 {stock.weeks.map((w) => (
                                   <div key={w.id} className="flex items-center gap-3 py-1.5 text-sm">
-                                    <Calendar className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-muted-foreground w-24">{w.week_start}</span>
-                                    <span className={`font-mono ${w.profit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                                    <Calendar className="h-3 w-3 text-[#7aa0d6]" />
+                                    <span className="w-24 text-[#43474f]">{w.week_start}</span>
+                                    <span className={`font-mono ${w.profit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
                                       {w.profit >= 0 ? "+" : ""}{usd.format(Math.round(w.profit))}
                                     </span>
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-xs text-[#43474f]">
                                       ({w.profit_pct >= 0 ? "+" : ""}{w.profit_pct.toFixed(1)}%)
                                     </span>
                                   </div>
@@ -313,18 +319,18 @@ export default function HistoryPage() {
                           {/* Branch 2: Portfolio Contribution */}
                           <button
                             onClick={() => toggleBranch(contribKey)}
-                            className="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-accent/30 transition-colors"
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#f9f9fe]"
                           >
-                            <div className="w-1 h-8 bg-primary rounded-full" />
-                            <BarChart3 className="w-4 h-4 text-primary" />
-                            <span className="font-medium text-sm text-foreground">Portfolio Contribution</span>
-                            <span className="text-xs text-muted-foreground ml-auto mr-2">
+                            <div className="h-8 w-1 rounded-full bg-[#003666]" />
+                            <BarChart3 className="h-4 w-4 text-[#003666]" />
+                            <span className="text-sm font-medium text-[#002141]">Portfolio Contribution</span>
+                            <span className="ml-auto mr-2 text-xs text-[#43474f]">
                               impact on total
                             </span>
                             {expandedBranches.has(contribKey) ? (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              <ChevronDown className="h-4 w-4 text-[#7aa0d6]" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              <ChevronRight className="h-4 w-4 text-[#7aa0d6]" />
                             )}
                           </button>
                           <AnimatePresence>
@@ -337,12 +343,12 @@ export default function HistoryPage() {
                               >
                                 {stock.weeks.map((w) => (
                                   <div key={w.id} className="flex items-center gap-3 py-1.5 text-sm">
-                                    <Calendar className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-muted-foreground w-24">{w.week_start}</span>
-                                    <span className={`font-mono ${w.portfolio_contribution >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                                    <Calendar className="h-3 w-3 text-[#7aa0d6]" />
+                                    <span className="w-24 text-[#43474f]">{w.week_start}</span>
+                                    <span className={`font-mono ${w.portfolio_contribution >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
                                       {w.portfolio_contribution >= 0 ? "+" : ""}{w.portfolio_contribution.toFixed(2)}%
                                     </span>
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-xs text-[#43474f]">
                                       of total portfolio P&L
                                     </span>
                                   </div>
@@ -354,18 +360,18 @@ export default function HistoryPage() {
                           {/* Branch 3: Weight Over Time */}
                           <button
                             onClick={() => toggleBranch(weightKey)}
-                            className="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-accent/30 transition-colors"
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#f9f9fe]"
                           >
-                            <div className="w-1 h-8 bg-foreground rounded-full" />
-                            <Percent className="w-4 h-4 text-foreground" />
-                            <span className="font-medium text-sm text-foreground">Weight Over Time</span>
-                            <span className="text-xs text-muted-foreground ml-auto mr-2">
+                            <div className="h-8 w-1 rounded-full bg-[#7aa0d6]" />
+                            <Percent className="h-4 w-4 text-[#003666]" />
+                            <span className="text-sm font-medium text-[#002141]">Weight Over Time</span>
+                            <span className="ml-auto mr-2 text-xs text-[#43474f]">
                               allocation drift
                             </span>
                             {expandedBranches.has(weightKey) ? (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              <ChevronDown className="h-4 w-4 text-[#7aa0d6]" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              <ChevronRight className="h-4 w-4 text-[#7aa0d6]" />
                             )}
                           </button>
                           <AnimatePresence>
@@ -378,20 +384,20 @@ export default function HistoryPage() {
                               >
                                 {stock.weeks.map((w) => (
                                   <div key={w.id} className="flex items-center gap-3 py-1.5 text-sm">
-                                    <Calendar className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-muted-foreground w-24">{w.week_start}</span>
+                                    <Calendar className="h-3 w-3 text-[#7aa0d6]" />
+                                    <span className="w-24 text-[#43474f]">{w.week_start}</span>
                                     <div className="flex-1 flex items-center gap-2">
-                                      <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden max-w-32">
+                                      <div className="h-2 max-w-32 flex-1 overflow-hidden rounded-full bg-[#eeedf2]">
                                         <div
-                                          className="h-full bg-primary rounded-full"
+                                          className="h-full rounded-full bg-[#003666]"
                                           style={{ width: `${Math.min(w.portfolio_weight, 100)}%` }}
                                         />
                                       </div>
-                                      <span className="font-mono text-foreground w-14 text-right">
+                                      <span className="w-14 text-right font-mono text-[#002141]">
                                         {w.portfolio_weight.toFixed(1)}%
                                       </span>
                                     </div>
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-xs text-[#43474f]">
                                       {usd.format(Math.round(w.market_value))}
                                     </span>
                                   </div>
