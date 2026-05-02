@@ -22,6 +22,8 @@ export type XpApiPayload = {
   totalXP: number;
   level: number;
   xpThisWeek: number;
+  /** Consecutive calendar days with a Trading School lesson completion (UTC). */
+  streak: number;
 };
 
 export type XpState = {
@@ -30,6 +32,7 @@ export type XpState = {
   xpThisWeek: number;
   xpToNextLevel: number;
   levelLabel: (typeof LEVEL_LABELS)[number];
+  streak: number;
 };
 
 function labelForLevel(level: number): (typeof LEVEL_LABELS)[number] {
@@ -44,6 +47,7 @@ function deriveXpState(payload: XpApiPayload | undefined): XpState {
   const rawLevel = payload?.level ?? 1;
   const level = Math.min(7, Math.max(1, Math.floor(rawLevel)));
   const xpThisWeek = payload?.xpThisWeek ?? 0;
+  const streak = Math.max(0, Math.floor(payload?.streak ?? 0));
 
   const xpToNextLevel =
     level >= 7 ? 0 : Math.max(0, XP_BREAKPOINTS[level] - totalXP);
@@ -54,6 +58,7 @@ function deriveXpState(payload: XpApiPayload | undefined): XpState {
     xpThisWeek,
     xpToNextLevel,
     levelLabel: labelForLevel(level),
+    streak,
   };
 }
 

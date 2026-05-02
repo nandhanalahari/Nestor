@@ -11,6 +11,7 @@ import {
   LineChart,
   Zap,
   PieChart,
+  BookOpen,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -126,6 +127,12 @@ export default function HomePage() {
             <Link href="/scenarios">
               <PieChart className="w-4 h-4" />
               Try What-If Scenarios
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="gap-2">
+            <Link href="/lessons">
+              <BookOpen className="w-4 h-4" />
+              Trading School
             </Link>
           </Button>
         </motion.div>

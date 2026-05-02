@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("user_xp")
-    .select("total_xp, level, xp_this_week")
+    .select("total_xp, level, xp_this_week, streak")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -46,6 +46,7 @@ export async function GET(req: Request) {
       totalXP: 0,
       level: 1,
       xpThisWeek: 0,
+      streak: 0,
     });
   }
 
@@ -53,5 +54,6 @@ export async function GET(req: Request) {
     totalXP: data.total_xp,
     level: data.level,
     xpThisWeek: data.xp_this_week,
+    streak: typeof data.streak === "number" ? data.streak : 0,
   });
 }
