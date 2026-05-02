@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/auth-provider";
+import { Nav } from "@/components/nav";
 import { Sidebar } from "@/components/sidebar";
 import { Loader2, Sun, Moon } from "lucide-react";
 
@@ -60,6 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <main className="flex-1 min-w-0 p-4 md:p-8 bg-background relative overflow-x-hidden">
         {themeButton}
+        <Nav />
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

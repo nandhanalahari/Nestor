@@ -40,6 +40,7 @@ import {
 import type { Holding, Quote } from "@/lib/types"
 import { usd } from "@/lib/format"
 import { useAuth } from "@/components/auth-provider"
+import { RiskMeter } from "@/components/RiskMeter"
 import { authFetch } from "@/lib/api"
 import { NewsRail } from "@/components/NewsRail"
 
@@ -50,6 +51,10 @@ type PortfolioPayload = {
   dailyChangePct: number
   asOf: string
   warnings: string[]
+  healthScore?: number | null
+  factors?: Array<{ key: string; score: number; plainText: string }>
+  scoreDelta?: number | null
+  weeklyHigh?: number | null
 }
 
 const COLORS = [
@@ -452,6 +457,9 @@ export default function DashboardPage() {
                     {dayUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                     {dayUp ? "+" : ""}{dailyChangePct.toFixed(2)}% today
                   </p>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    Yahoo Finance · {payload?.asOf ?? ""}
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -477,15 +485,21 @@ export default function DashboardPage() {
               <Card className="hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Data Source
+                    Portfolio health
                   </CardTitle>
-                  <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                  <Activity className="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">Yahoo Finance</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Live · {payload?.asOf ?? ""}
-                  </p>
+                <CardContent className="flex flex-col items-center pt-0 pb-4">
+                  <RiskMeter
+                    score={payload?.healthScore ?? 0}
+                    size={148}
+                    showLabel={false}
+                    animate
+                    portfolioData={{
+                      scoreDelta: payload?.scoreDelta ?? null,
+                      weeklyHigh: payload?.weeklyHigh ?? null,
+                    }}
+                  />
                 </CardContent>
               </Card>
             </motion.div>
