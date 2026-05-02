@@ -4,39 +4,49 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f7f9fc;
-  --foreground: #1d2a36;
+  /* Goldman Sachs-inspired design system */
+  --background: #f9f9fe;
+  --foreground: #1a1c1f;
   --card: #ffffff;
-  --card-foreground: #1d2a36;
+  --card-foreground: #1a1c1f;
   --popover: #ffffff;
-  --popover-foreground: #1d2a36;
-  --primary: #7399c6;
+  --popover-foreground: #1a1c1f;
+
+  /* Navy primary */
+  --primary: #002141;
   --primary-foreground: #ffffff;
-  --secondary: #edf3f8;
-  --secondary-foreground: #253545;
-  --muted: #edf3f8;
-  --muted-foreground: #5d6d7d;
-  --accent: #dce8f4;
-  --accent-foreground: #253545;
-  --destructive: oklch(0.577 0.245 27.325);
+  --primary-container: #003666;
+
+  /* Surface / secondary */
+  --secondary: #f7e382;
+  --secondary-foreground: #211b00;
+
+  --muted: #eeedf2;
+  --muted-foreground: #43474f;
+  --accent: #e8e8ec;
+  --accent-foreground: #1a1c1f;
+  --destructive: #ba1a1a;
   --destructive-foreground: #ffffff;
-  --border: #d6e1ec;
-  --input: #d6e1ec;
-  --ring: #7399c6;
-  --chart-1: #7399c6;
-  --chart-2: #253545;
-  --chart-3: #a9c4dd;
-  --chart-4: #5d6d7d;
-  --chart-5: #dce8f4;
-  --radius: 0.625rem;
+  --border: #e0e0e0;
+  --input: #e2e2e7;
+  --ring: #003666;
+
+  --chart-1: #002141;
+  --chart-2: #7aa0d6;
+  --chart-3: #f7e382;
+  --chart-4: #43474f;
+  --chart-5: #eeedf2;
+
+  --radius: 0.75rem;
+
   --sidebar: #ffffff;
-  --sidebar-foreground: #253545;
-  --sidebar-primary: #7399c6;
+  --sidebar-foreground: #43474f;
+  --sidebar-primary: #002141;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #edf3f8;
-  --sidebar-accent-foreground: #253545;
-  --sidebar-border: #d6e1ec;
-  --sidebar-ring: #7399c6;
+  --sidebar-accent: #f3f3f8;
+  --sidebar-accent-foreground: #002141;
+  --sidebar-border: #e2e2e7;
+  --sidebar-ring: #003666;
 }
 
 .dark {
@@ -46,8 +56,9 @@
   --card-foreground: #f7f9fc;
   --popover: #172330;
   --popover-foreground: #f7f9fc;
-  --primary: #a9c4dd;
-  --primary-foreground: #101820;
+  --primary: #a4c9ff;
+  --primary-foreground: #001c39;
+  --primary-container: #1d4879;
   --secondary: #253545;
   --secondary-foreground: #f7f9fc;
   --muted: #253545;
@@ -58,24 +69,25 @@
   --destructive-foreground: #ffffff;
   --border: #30465a;
   --input: #30465a;
-  --ring: #a9c4dd;
-  --chart-1: #a9c4dd;
+  --ring: #a4c9ff;
+  --chart-1: #a4c9ff;
   --chart-2: #ffffff;
-  --chart-3: #7399c6;
+  --chart-3: #7aa0d6;
   --chart-4: #b6c4d1;
   --chart-5: #30465a;
   --sidebar: #101820;
   --sidebar-foreground: #f7f9fc;
-  --sidebar-primary: #a9c4dd;
+  --sidebar-primary: #a4c9ff;
   --sidebar-primary-foreground: #101820;
   --sidebar-accent: #253545;
   --sidebar-accent-foreground: #f7f9fc;
   --sidebar-border: #30465a;
-  --sidebar-ring: #a9c4dd;
+  --sidebar-ring: #a4c9ff;
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Manrope', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -127,7 +139,58 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
   }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+}
+
+/* Goldman Sachs Utility Classes */
+
+.app-surface {
+  background: #f9f9fe;
+}
+
+/* Gold left-border accent for insight/tip cards */
+.goldman-insight-accent {
+  border-left: 4px solid #f7e382;
+  padding-left: 1rem;
+}
+
+/* Tonal card shadow (used on white cards) */
+.tonal-card {
+  box-shadow: 0 20px 20px rgba(0, 0, 0, 0.04);
+}
+
+.tonal-layer {
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 20px 20px rgba(0, 0, 0, 0.04);
+}
+
+.goldman-panel {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 20px rgba(0, 0, 0, 0.04);
+}
+
+.goldman-kicker {
+  color: #524700;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.goldman-hero {
+  background: #003666;
+  color: #ffffff;
+}
+
+/* Sidebar drop shadow */
+.sidebar-shadow {
+  box-shadow: 20px 0 20px rgba(0, 0, 0, 0.02);
 }
 
 /* Leaderboard row stagger + level-7 ring shimmer (see LeaderboardTable) */

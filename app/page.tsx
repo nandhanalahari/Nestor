@@ -1,214 +1,227 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { motion } from "framer-motion"
 import {
-  TrendingUp,
-  Shield,
-  Brain,
-  Target,
   ArrowRight,
-  LineChart,
-  Zap,
-  PieChart,
   BookOpen,
+  GitBranch,
+  LayoutDashboard,
+  Lightbulb,
+  Loader2,
+  TrendingUp,
 } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
+import { authFetch } from "@/lib/api"
+import { usd } from "@/lib/format"
+import type { Holding } from "@/lib/types"
 
-const features = [
+type PortfolioPayload = {
+  holdings: Holding[]
+  totalValue: number
+  dailyChangePct: number
+}
+
+const jumpBackItems = [
   {
-    icon: Brain,
-    title: "AI-Powered Insights",
-    description:
-      "Gemini explains every recommendation in plain English so you always know what's happening.",
+    href: "/dashboard",
+    title: "Go to Dashboard",
+    description: "Your full portfolio, charts and holdings",
+    icon: LayoutDashboard,
+    featured: true,
   },
   {
-    icon: Shield,
-    title: "Risk Management",
-    description:
-      "Stress-test your portfolio against real historical crises with live Alpha Vantage data.",
+    href: "/lessons",
+    title: "Today's lesson: The 2008 Crash",
+    description: "Trading School · +50 XP · ~3 min",
+    icon: BookOpen,
   },
   {
-    icon: Target,
-    title: "Goal Tracking",
-    description:
-      "Set financial goals in plain language and get AI guidance to stay on track.",
-  },
-  {
-    icon: LineChart,
-    title: "What-If Scenarios",
-    description:
-      "Simulate inflation spikes, recessions, and market crashes — see how your portfolio responds.",
+    href: "/scenarios",
+    title: "Run a What-If Scenario",
+    description: "See how your portfolio handles a market shock",
+    icon: GitBranch,
   },
 ]
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
-}
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { type: "spring", stiffness: 100, damping: 12 },
-  },
+function getFirstName(userName?: string | null, email?: string | null) {
+  const source = userName || email?.split("@")[0] || "Investor"
+  return source.split(/\s+/)[0]
 }
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const [portfolio, setPortfolio] = useState<PortfolioPayload | null>(null)
+  const [loadingPortfolio, setLoadingPortfolio] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+
+    let cancelled = false
+    async function loadPortfolio() {
+      setLoadingPortfolio(true)
+      try {
+        const res = await authFetch("/api/portfolio")
+        if (!res.ok) return
+        const data = (await res.json()) as PortfolioPayload
+        if (!cancelled) setPortfolio(data)
+      } finally {
+        if (!cancelled) setLoadingPortfolio(false)
+      }
+    }
+
+    void loadPortfolio()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const firstName = getFirstName(
+    user?.user_metadata?.display_name,
+    user?.email,
+  )
+
+  const totalValue = portfolio?.totalValue ?? 12480
+  const dailyChangePct = portfolio?.dailyChangePct ?? 1.34
+  const holdingsCount = portfolio?.holdings?.length ?? 5
+  const isPositive = dailyChangePct >= 0
+
+  const tip = useMemo(() => {
+    const largestHolding = portfolio?.holdings?.[0]?.ticker
+    if (largestHolding) {
+      return `${largestHolding} is one part of your portfolio. Spreading money across several holdings can reduce the impact of any single company.`
+    }
+    return "Index funds like SPY hold hundreds of stocks at once - instant diversification."
+  }, [portfolio])
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-16 pb-16">
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="text-center pt-8"
-      >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6"
-        >
-          <Zap className="w-4 h-4" />
-          AI-Powered Portfolio Management
-        </motion.div>
-
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
+    <div className="-mx-8 -mb-12 -mt-8 min-h-[calc(100vh-4rem)] bg-[#f9f9fe] px-8 py-12 text-[#002141]">
+      <div className="mx-auto max-w-[820px]">
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 text-balance"
+          transition={{ duration: 0.35 }}
+          className="pt-4"
         >
-          Smarter Investing for{" "}
-          <span className="text-primary">Everyone</span>
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 text-pretty"
-        >
-          Nestor uses Gemini AI and live market data to help you make better
-          investment decisions, manage risk, and achieve your financial goals.
-        </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4"
-        >
-          {user ? (
-            <Button asChild size="lg" className="gap-2">
-              <Link href="/dashboard">
-                Go to Dashboard
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
-          ) : (
-            <Button asChild size="lg" className="gap-2">
-              <Link href="/auth">
-                Get Started
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
-          )}
-          <Button asChild variant="outline" size="lg" className="gap-2">
-            <Link href="/scenarios">
-              <PieChart className="w-4 h-4" />
-              Try What-If Scenarios
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="lg" className="gap-2">
-            <Link href="/lessons">
-              <BookOpen className="w-4 h-4" />
-              Trading School
-            </Link>
-          </Button>
-        </motion.div>
-      </motion.section>
-
-      <motion.section
-        variants={containerVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: "-100px" }}
-      >
-        <motion.div variants={itemVariants} className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-foreground mb-4">
-            Everything You Need to Invest Smarter
-          </h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Powered by live Alpha Vantage market data and Gemini AI explanations.
+          <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#7aa0d6]">
+            Good morning
           </p>
-        </motion.div>
+          <h1 className="mt-3 font-display text-4xl font-extrabold tracking-normal text-[#002141] md:text-5xl">
+            Welcome back, {firstName}.
+          </h1>
+        </motion.section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {features.map((feature, index) => (
-            <motion.div
-              key={index}
-              variants={itemVariants}
-              whileHover={{ y: -4 }}
-              transition={{ type: "spring", stiffness: 300 }}
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08 }}
+          className="mt-10"
+        >
+          <p className="text-sm font-bold tracking-wide text-[#6b7280]">
+            Your portfolio
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-5">
+            <p className="font-display text-6xl font-extrabold leading-none tracking-tight text-[#002141]">
+              {usd.format(Math.round(totalValue))}
+            </p>
+            <div
+              className={`rounded-full border px-4 py-2 text-lg font-bold ${
+                isPositive
+                  ? "border-[#a9dfc3] bg-[#e7f7ef] text-[#146c43]"
+                  : "border-[#f4b7b7] bg-[#fff1f1] text-[#9f1239]"
+              }`}
             >
-              <Card className="h-full hover:shadow-lg transition-all duration-300 hover:border-primary/20">
-                <CardContent className="p-6 flex gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <feature.icon className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">
-                      {feature.title}
-                    </h3>
-                    <p className="text-muted-foreground">{feature.description}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      </motion.section>
-
-      <motion.section
-        initial={{ opacity: 0, scale: 0.95 }}
-        whileInView={{ opacity: 1, scale: 1 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-2xl bg-primary p-8 md:p-12 text-center"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.15),_transparent_50%)]" />
-        <div className="relative z-10">
-          <TrendingUp className="w-12 h-12 text-primary-foreground mx-auto mb-6 opacity-90" />
-          <h2 className="text-2xl md:text-3xl font-bold text-primary-foreground mb-4 text-balance">
-            Ready to Take Control of Your Investments?
-          </h2>
-          <p className="text-primary-foreground/80 max-w-lg mx-auto mb-8">
-            Create an account to save your portfolio, track goals, and get
-            personalized AI recommendations.
+              <span className="inline-flex items-center gap-1">
+                <TrendingUp className={`h-4 w-4 ${isPositive ? "" : "rotate-180"}`} />
+                {isPositive ? "+" : ""}
+                {dailyChangePct.toFixed(2)}% today
+              </span>
+            </div>
+          </div>
+          <p className="mt-3 text-base font-medium text-[#9aa7b8]">
+            {loadingPortfolio ? "Loading holdings" : `${holdingsCount} holdings`}
           </p>
-          <Button
-            asChild
-            size="lg"
-            variant="secondary"
-            className="gap-2 bg-white text-primary hover:bg-white/90"
-          >
-            <Link href={user ? "/dashboard" : "/auth"}>
-              {user ? "Go to Dashboard" : "Get Started Free"}
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </Button>
-        </div>
-      </motion.section>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.16 }}
+          className="mt-14"
+        >
+          <div className="flex gap-5 rounded-xl border border-[#e0e0e0] bg-white p-6 shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f7d645] bg-[#fff7c8] text-[#6c5e06]">
+              <Lightbulb className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-[#524700]">
+                Today's tip
+              </p>
+              <p className="mt-3 max-w-2xl text-xl font-semibold leading-8 text-[#002141]">
+                {tip}
+              </p>
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.24 }}
+          className="mt-20"
+        >
+          <p className="mb-4 text-sm font-extrabold uppercase tracking-[0.18em] text-[#9aa7b8]">
+            Jump back in
+          </p>
+          <div className="space-y-3">
+            {jumpBackItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`group flex items-center gap-4 rounded-xl border p-5 transition-all active:scale-[0.99] ${
+                  item.featured
+                    ? "border-[#002141] bg-[#002141] text-white shadow-[0_20px_20px_rgba(0,0,0,0.08)] hover:bg-[#003666]"
+                    : "border-[#e0e0e0] bg-white text-[#002141] hover:border-[#7aa0d6]"
+                }`}
+              >
+                <div
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${
+                    item.featured
+                      ? "bg-white/10 text-white"
+                      : "bg-[#eef4fb] text-[#003666]"
+                  }`}
+                >
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg font-bold">{item.title}</p>
+                  <p
+                    className={`mt-0.5 text-sm ${
+                      item.featured ? "text-white/70" : "text-[#6b7280]"
+                    }`}
+                  >
+                    {item.description}
+                  </p>
+                </div>
+                <ArrowRight
+                  className={`h-5 w-5 transition-transform group-hover:translate-x-1 ${
+                    item.featured ? "text-white/70" : "text-[#7aa0d6]"
+                  }`}
+                />
+              </Link>
+            ))}
+          </div>
+        </motion.section>
+      </div>
     </div>
   )
 }

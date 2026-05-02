@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   GitBranch,
   Target,
-  TrendingUp,
   Home,
   LogOut,
   User,
@@ -55,22 +54,15 @@ export function Sidebar() {
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="w-64 h-screen bg-sidebar border-r border-sidebar-border flex flex-col p-6 transition-colors duration-300 sticky top-0"
+      className="sidebar-shadow fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-200 bg-white py-6 font-display transition-colors duration-300"
     >
-      <Link href="/" className="flex items-center gap-2 mb-10 group">
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"
-        >
-          <TrendingUp className="w-5 h-5 text-primary-foreground" />
-        </motion.div>
-        <span className="text-2xl font-bold text-primary group-hover:opacity-80 transition-opacity">
-          Nestor.
+      <Link href="/" className="group mb-10 px-6">
+        <span className="block text-xl font-bold tracking-tight text-[#003666] transition-opacity group-hover:opacity-80">
+          Nestor
         </span>
       </Link>
 
-      <nav className="flex flex-col gap-2 flex-grow">
+      <nav className="flex flex-grow flex-col gap-1 px-3">
         {navItems.map((item, index) => {
           const isActive = pathname === item.href
           return (
@@ -83,16 +75,16 @@ export function Sidebar() {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative",
+                  "relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-all duration-200 active:scale-[0.98]",
                   isActive
-                    ? "bg-sidebar-accent text-primary font-medium"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
+                    ? "border-r-4 border-[#003666] bg-slate-50 font-semibold text-[#003666]"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 )}
               >
                 {isActive && (
                   <motion.div
                     layoutId="activeTab"
-                    className="absolute inset-0 bg-sidebar-accent rounded-lg -z-10"
+                    className="absolute inset-0 -z-10 rounded-lg bg-slate-50"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
@@ -108,16 +100,16 @@ export function Sidebar() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        className="mt-auto"
+        className="mt-auto px-6"
       >
         {user ? (
-          <div className="bg-accent rounded-lg overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80">
             {/* Clickable user info row */}
             <button
               onClick={() => setUserMenuOpen((prev) => !prev)}
-              className="w-full p-4 flex items-center gap-2 hover:bg-accent/80 transition-colors text-left"
+              className="flex w-full items-center gap-2 p-4 text-left transition-colors hover:bg-white"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <User className="w-4 h-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
@@ -153,8 +145,8 @@ export function Sidebar() {
                       className={cn(
                         "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors w-full",
                         pathname === "/profile"
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-foreground hover:bg-background/60"
+                          ? "bg-white text-primary font-medium"
+                          : "text-foreground hover:bg-white"
                       )}
                     >
                       <UserCircle className="w-4 h-4" />
@@ -162,7 +154,7 @@ export function Sidebar() {
                     </Link>
                     <button
                       onClick={handleSignOut}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-destructive hover:bg-background/60 transition-colors w-full"
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white hover:text-destructive"
                     >
                       <LogOut className="w-4 h-4" />
                       Sign out
@@ -174,7 +166,7 @@ export function Sidebar() {
           </div>
         ) : (
           <Link href="/auth">
-            <div className="p-4 bg-accent rounded-lg text-center">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <p className="text-sm font-medium text-primary">Sign in</p>
               <p className="text-xs text-muted-foreground">to save your data</p>
             </div>

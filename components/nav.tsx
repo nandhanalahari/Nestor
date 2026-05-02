@@ -2,20 +2,28 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Flame } from "lucide-react";
+import { Flame, TrendingUp } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { XPBar } from "@/components/XPBar";
 import { useXP } from "@/hooks/useXP";
+import { authFetch } from "@/lib/api";
+import { usd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export function Nav({ className }: { className?: string }) {
   const { user } = useAuth();
+  const pathname = usePathname();
   const { xpState, isLoading } = useXP();
   const [recentGain, setRecentGain] = useState(0);
+  const [portfolioSummary, setPortfolioSummary] = useState<{
+    totalValue: number;
+    dailyChangePct: number;
+  } | null>(null);
   const prevXP = useRef<number | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showPortfolioSummary = Boolean(user && pathname !== "/");
 
   useEffect(() => {
     prevXP.current = null;
@@ -45,67 +53,102 @@ export function Nav({ className }: { className?: string }) {
     };
   }, [user, isLoading, xpState.totalXP]);
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!showPortfolioSummary) {
+      setPortfolioSummary(null);
+      return;
+    }
 
-  const avatarUrl =
-    typeof user.user_metadata?.avatar_url === "string"
-      ? user.user_metadata.avatar_url
-      : undefined;
+    let cancelled = false;
+    async function loadSummary() {
+      try {
+        const res = await authFetch("/api/portfolio");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          totalValue?: number;
+          dailyChangePct?: number;
+        };
+        if (!cancelled) {
+          setPortfolioSummary({
+            totalValue: Number(data.totalValue) || 0,
+            dailyChangePct: Number(data.dailyChangePct) || 0,
+          });
+        }
+      } catch {
+        // Header summary is non-critical.
+      }
+    }
 
-  const initials =
-    user.email?.slice(0, 2).toUpperCase() ||
-    user.user_metadata?.display_name?.slice(0, 2).toUpperCase() ||
-    "?";
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [showPortfolioSummary, pathname]);
+
+  const headerUp = (portfolioSummary?.dailyChangePct ?? 0) >= 0;
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 mb-4 flex items-center justify-end gap-3 border-b border-border/60 bg-background/85 py-2 pb-3 backdrop-blur-md pr-12 supports-[backdrop-filter]:bg-background/70",
+        "fixed left-64 right-0 top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-8 font-display text-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/80",
         className,
       )}
     >
-      <XPBar
-        levelLabel={xpState.levelLabel}
-        level={xpState.level}
-        totalXP={xpState.totalXP}
-        xpToNextLevel={xpState.xpToNextLevel}
-        recentGain={recentGain}
-        isLoading={isLoading}
-      />
+      <div>
+        {showPortfolioSummary && portfolioSummary ? (
+          <div className="flex items-center gap-3">
+            <span className="font-display text-lg font-bold text-[#002141]">
+              {usd.format(Math.round(portfolioSummary.totalValue))}
+            </span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold",
+                headerUp
+                  ? "border-[#a9dfc3] bg-[#e7f7ef] text-[#146c43]"
+                  : "border-[#f4b7b7] bg-[#fff1f1] text-[#9f1239]",
+              )}
+            >
+              <TrendingUp className={cn("h-3.5 w-3.5", !headerUp && "rotate-180")} />
+              {headerUp ? "+" : ""}
+              {(portfolioSummary.dailyChangePct ?? 0).toFixed(2)}% today
+            </span>
+          </div>
+        ) : null}
+      </div>
 
-      <Link
-        href="/lessons"
-        title="Trading School streak — consecutive days with a lesson"
-        className={cn(
-          "flex shrink-0 items-center gap-1 rounded-full border border-orange-500/35 bg-gradient-to-b from-orange-500/15 to-amber-600/10 px-2.5 py-1 shadow-sm transition-opacity hover:opacity-95",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        )}
-        aria-label={`Lesson streak: ${xpState.streak} days`}
-      >
-        <Flame
-          className="size-[18px] shrink-0 text-orange-500 dark:text-orange-400"
-          aria-hidden
-          strokeWidth={2.25}
-        />
-        <span className="min-w-[1ch] text-center text-sm font-bold tabular-nums leading-none text-orange-700 dark:text-orange-300">
-          {isLoading ? "…" : xpState.streak}
-        </span>
-      </Link>
+      <div className="flex items-center gap-4">
+        {user ? (
+          <XPBar
+            levelLabel={xpState.levelLabel}
+            level={xpState.level}
+            totalXP={xpState.totalXP}
+            xpToNextLevel={xpState.xpToNextLevel}
+            recentGain={recentGain}
+            isLoading={isLoading}
+          />
+        ) : null}
 
-      <Link
-        href="/profile"
-        className="shrink-0 rounded-full ring-offset-background transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        aria-label="My profile"
-      >
-        <Avatar className="size-8 border border-border shadow-sm">
-          {avatarUrl ? (
-            <AvatarImage src={avatarUrl} alt="" />
-          ) : null}
-          <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
-      </Link>
+        {user ? (
+          <Link
+            href="/lessons"
+            title="Trading School streak - consecutive days with a lesson"
+            className={cn(
+              "flex shrink-0 items-center gap-1 rounded-full border border-[#f7e382] bg-[#f7e382]/35 px-2.5 py-1 text-[#524700] shadow-sm transition-opacity hover:opacity-95",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#003666]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            )}
+            aria-label={`Lesson streak: ${xpState.streak} days`}
+          >
+            <Flame
+              className="size-[18px] shrink-0 text-[#73640e]"
+              aria-hidden
+              strokeWidth={2.25}
+            />
+            <span className="min-w-[1ch] text-center text-sm font-bold tabular-nums leading-none">
+              {isLoading ? "..." : xpState.streak}
+            </span>
+          </Link>
+        ) : null}
+      </div>
     </header>
   );
 }
