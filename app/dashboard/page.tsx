@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -13,7 +13,6 @@ import {
   PieChart,
   Plus,
   RefreshCw,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react"
@@ -62,15 +61,6 @@ type HoldingForm = {
   category: AssetCategory
   shares: string
   price: string
-}
-
-type ForecastPoint = { date: string; price: number }
-type LSTMForecast = {
-  ticker: string
-  current_price?: number
-  predicted_return: number
-  forecast: ForecastPoint[]
-  error?: string
 }
 
 type PerformanceRange = "1D" | "1W" | "1M" | "1Y"
@@ -212,9 +202,7 @@ export default function DashboardPage() {
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null)
   const [performanceRange, setPerformanceRange] = useState<PerformanceRange>("1M")
 
-  const [forecasts, setForecasts] = useState<Record<string, LSTMForecast>>({})
-  const [forecastLoading, setForecastLoading] = useState(false)
-  const [forecastError, setForecastError] = useState<string | null>(null)
+  const portfolioBreakdownRef = useRef<HTMLDivElement | null>(null)
 
   const loadPortfolio = useCallback(async () => {
     setFetching(true)
@@ -358,12 +346,19 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const openAddForm = () => {
+  const openAddForm = useCallback(() => {
     setEditingHoldingId(null)
     setHoldingForm(emptyForm)
     setHoldingQuoteError(null)
     setShowHoldingForm(true)
-  }
+  }, [])
+
+  const scrollToPortfolioBreakdownAndOpenAdd = useCallback(() => {
+    portfolioBreakdownRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    window.setTimeout(() => {
+      openAddForm()
+    }, 380)
+  }, [openAddForm])
 
   const chooseHoldingAsset = (ticker: string) => {
     const asset = CURATED_ASSETS.find((candidate) => candidate.ticker === ticker)
@@ -446,28 +441,6 @@ export default function DashboardPage() {
     }
   }
 
-  const fetchForecast = useCallback(async (tickers: string[]) => {
-    if (tickers.length === 0) return
-    setForecastLoading(true)
-    setForecastError(null)
-    try {
-      const res = await authFetch("/api/forecast", {
-        method: "POST",
-        body: JSON.stringify({ tickers, days: 30 }),
-      })
-      const data = await res.json()
-      if (res.ok && data.predictions) {
-        setForecasts(data.predictions)
-      } else {
-        setForecastError(data.error || "Could not run LSTM forecast")
-      }
-    } catch (error) {
-      setForecastError(error instanceof Error ? error.message : "Forecast failed")
-    } finally {
-      setForecastLoading(false)
-    }
-  }, [])
-
   if (authLoading || (!user && !authLoading)) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -514,7 +487,16 @@ export default function DashboardPage() {
                 Refresh Prices
               </Button>
             )}
-            <Button onClick={openAddForm} className="gap-2 bg-[#002141] text-white hover:bg-[#003666]">
+            <Button
+              onClick={() => {
+                if (payload && payload.holdings.length > 0) {
+                  scrollToPortfolioBreakdownAndOpenAdd()
+                } else {
+                  openAddForm()
+                }
+              }}
+              className="gap-2 bg-[#002141] text-white hover:bg-[#003666]"
+            >
               <Plus className="h-4 w-4" />
               Add Holding
             </Button>
@@ -603,6 +585,7 @@ export default function DashboardPage() {
             </Card>
           </div>
 
+          <div ref={portfolioBreakdownRef} id="portfolio-breakdown" className="scroll-mt-6">
           <Card className="rounded-lg border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
             <CardHeader className="flex flex-row items-center justify-between gap-4">
               <CardTitle className="flex items-center gap-2 font-display text-[#002141]">
@@ -766,9 +749,10 @@ export default function DashboardPage() {
                       {pieSegments.map((entry) => {
                         const focused = selectedTicker === entry.ticker
                         const dimmed = hasFocusedSlice && !focused
+                        const sliceKey = entry.asset.id ?? `pie-${entry.index}-${entry.ticker}`
                         return (
                           <path
-                            key={entry.ticker}
+                            key={sliceKey}
                             d={entry.path}
                             fill={dimmed ? "#d9e2ec" : COLORS[entry.index % COLORS.length]}
                             opacity={dimmed ? 0.65 : 1}
@@ -864,11 +848,12 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
 
           <Card className="rounded-lg border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
             <CardHeader className="flex flex-row items-center justify-between gap-4">
               <CardTitle className="font-display text-[#002141]">Manage Holdings</CardTitle>
-              <Button onClick={openAddForm} className="gap-2 bg-[#002141] text-white hover:bg-[#003666]">
+              <Button onClick={scrollToPortfolioBreakdownAndOpenAdd} className="gap-2 bg-[#002141] text-white hover:bg-[#003666]">
                 <Plus className="h-4 w-4" />
                 Add Holding
               </Button>
@@ -923,94 +908,6 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-lg border-[#e0e0e0] bg-white shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div>
-                <CardTitle className="flex items-center gap-2 font-display text-[#002141]">
-                  <Sparkles className="h-5 w-5 text-[#7aa0d6]" />
-                  LSTM 30-Day Price Forecast
-                </CardTitle>
-                <p className="mt-1 text-sm text-[#43474f]">
-                  Optional advanced forecast for holdings using price history.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => void fetchForecast(portfolioData.map((asset) => asset.ticker))}
-                disabled={forecastLoading || portfolioData.length === 0}
-                className="gap-2 border-[#003666]/25 bg-white text-[#003666] hover:bg-[#eef3fa]"
-              >
-                {forecastLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
-                {Object.keys(forecasts).length > 0 ? "Re-run" : "Run Forecast"}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {forecastError && <p className="mb-3 text-sm text-[#9f1239]">{forecastError}</p>}
-              {forecastLoading && (
-                <div className="py-8 text-center">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#003666]" />
-                  <p className="mt-2 text-sm text-[#43474f]">Training forecast models...</p>
-                </div>
-              )}
-              {!forecastLoading && Object.keys(forecasts).length === 0 && !forecastError && (
-                <div className="py-8 text-center">
-                  <Sparkles className="mx-auto mb-2 h-8 w-8 text-[#7aa0d6]" />
-                  <p className="text-sm text-[#43474f]">
-                    Click Run Forecast to generate 30-day price predictions.
-                  </p>
-                </div>
-              )}
-              {Object.keys(forecasts).length > 0 && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {Object.entries(forecasts).map(([ticker, forecast]) => {
-                    if (forecast.error) {
-                      return (
-                        <div key={ticker} className="rounded-lg border border-[#e0e0e0] bg-[#fbfbff] p-4">
-                          <p className="font-mono font-semibold text-[#002141]">{ticker}</p>
-                          <p className="mt-2 text-xs text-[#43474f]">{forecast.error}</p>
-                        </div>
-                      )
-                    }
-                    const targetPrice = forecast.forecast?.length
-                      ? forecast.forecast[forecast.forecast.length - 1].price
-                      : 0
-                    const isUp = forecast.predicted_return > 0
-                    return (
-                      <div key={ticker} className="rounded-lg border border-[#e0e0e0] bg-[#fbfbff] p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                          <div>
-                            <p className="font-mono font-semibold text-[#002141]">{ticker}</p>
-                            <p className="mt-0.5 text-xs text-[#43474f]">
-                              ${forecast.current_price?.toFixed(2)} to ${targetPrice.toFixed(2)}
-                            </p>
-                          </div>
-                          <span className={`text-sm font-semibold ${isUp ? "text-[#146c43]" : "text-[#9f1239]"}`}>
-                            {isUp ? "+" : ""}
-                            {forecast.predicted_return.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div className="h-32">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={forecast.forecast}>
-                              <CartesianGrid stroke="#e0e0e0" strokeDasharray="3 3" opacity={0.7} />
-                              <XAxis dataKey="date" fontSize={10} tick={{ fill: "#43474f", fontSize: 10 }} tickFormatter={(date) => date.slice(5)} />
-                              <YAxis fontSize={10} tick={{ fill: "#43474f", fontSize: 10 }} tickFormatter={(value) => `$${value}`} />
-                              <Tooltip
-                                formatter={(value: number) => [`$${value.toFixed(2)}`, "Price"]}
-                                contentStyle={{ borderColor: "#e0e0e0", borderRadius: 8, boxShadow: "0 20px 20px rgba(0,0,0,.04)", fontSize: "11px" }}
-                              />
-                              <Line type="monotone" dataKey="price" stroke={isUp ? "#003666" : "#9f1239"} strokeWidth={2} dot={false} />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </CardContent>
           </Card>
         </>

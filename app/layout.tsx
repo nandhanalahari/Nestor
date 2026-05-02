@@ -47,7 +47,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${manrope.variable} light`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${manrope.variable} light`}
+      suppressHydrationWarning
+    >
       <body suppressHydrationWarning className="font-sans antialiased bg-background">
         <AuthProvider>
           <AppShell>{children}</AppShell>
