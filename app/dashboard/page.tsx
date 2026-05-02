@@ -20,6 +20,7 @@ import {
   BarChart3,
   RefreshCw,
   Activity,
+  Shield,
 } from "lucide-react"
 import {
   PieChart as RechartsPie,
@@ -33,7 +34,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts"
-import type { Holding, Quote } from "@/lib/types"
+import type { Holding, Quote, StockRiskScore } from "@/lib/types"
 import { usd, usdDetail } from "@/lib/format"
 import { useAuth } from "@/components/auth-provider"
 import { RiskMeter } from "@/components/RiskMeter"
@@ -88,6 +89,72 @@ const itemVariants = {
   },
 }
 
+type RiskHoldingPayload = {
+  ticker: string
+  name: string
+  category: string
+  weight: number
+}
+
+/** Dollar weights when sizing vs portfolio; weight 1 = intrinsic-only preview for the symbol. */
+function buildAddRiskHoldings(
+  addForm: { ticker: string; name: string; category: string; shares: string; cost_basis: string },
+  addLiveQuote: { price: number } | null,
+  portfolioRows: Array<{ ticker: string; name: string; category: string; marketValue: number }>,
+): {
+  holdings: RiskHoldingPayload[]
+  mergedPortfolio: boolean
+} | null {
+  const addTicker = addForm.ticker.trim().toUpperCase()
+  const addName = addForm.name.trim()
+  if (!addTicker || !addName) return null
+
+  const sh = parseFloat(addForm.shares) || 0
+  let addDollars = parseFloat(addForm.cost_basis) || 0
+  if (addLiveQuote && sh > 0) {
+    addDollars = Math.round(sh * addLiveQuote.price * 100) / 100
+  }
+
+  if (addDollars > 0) {
+    const map = new Map<string, RiskHoldingPayload>()
+    for (const d of portfolioRows) {
+      const t = d.ticker.toUpperCase()
+      map.set(t, {
+        ticker: d.ticker,
+        name: d.name,
+        category: d.category,
+        weight: Math.max(0, d.marketValue),
+      })
+    }
+    const prev = map.get(addTicker)
+    if (prev) {
+      map.set(addTicker, { ...prev, weight: prev.weight + addDollars })
+    } else {
+      map.set(addTicker, {
+        ticker: addTicker,
+        name: addName,
+        category: addForm.category,
+        weight: addDollars,
+      })
+    }
+    const holdings = Array.from(map.values()).filter((h) => h.weight > 0)
+    if (holdings.length === 0) return null
+    return { holdings, mergedPortfolio: portfolioRows.length > 0 }
+  }
+
+  return {
+    holdings: [
+      {
+        ticker: addTicker,
+        name: addName,
+        category: addForm.category,
+        weight: 1,
+      },
+    ],
+    mergedPortfolio: false,
+  }
+}
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -108,6 +175,10 @@ export default function DashboardPage() {
   const [addQuoteLoading, setAddQuoteLoading] = useState(false)
   const [adding, setAdding] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [addRiskLoading, setAddRiskLoading] = useState(false)
+  const [addRiskScore, setAddRiskScore] = useState<StockRiskScore | null>(null)
+  const [addRiskHint, setAddRiskHint] = useState<string>("")
+  const [addRiskError, setAddRiskError] = useState<string | null>(null)
 
   const refreshPrices = useCallback(async (tickers: string[]) => {
     if (tickers.length === 0) return
@@ -227,6 +298,82 @@ export default function DashboardPage() {
       }
     })
   }, [payload, quoteByTicker])
+
+  useEffect(() => {
+    if (!showAddForm || !user) {
+      setAddRiskScore(null)
+      setAddRiskHint("")
+      setAddRiskError(null)
+      setAddRiskLoading(false)
+      return
+    }
+
+    const spec = buildAddRiskHoldings(addForm, addLiveQuote, portfolioData)
+    if (!spec) {
+      setAddRiskScore(null)
+      setAddRiskHint("")
+      setAddRiskError(null)
+      setAddRiskLoading(false)
+      return
+    }
+
+    const sh = parseFloat(addForm.shares) || 0
+    let addDollars = parseFloat(addForm.cost_basis) || 0
+    if (addLiveQuote && sh > 0) {
+      addDollars = Math.round(sh * addLiveQuote.price * 100) / 100
+    }
+
+    const hint = spec.mergedPortfolio
+      ? "Scores use price history + FRED macro, weighted by your live position sizes plus this buy."
+      : addDollars > 0
+        ? "Score for this buy using only the dollars/shares you entered (you have no other holdings yet, or enter a portfolio first)."
+        : "Intrinsic risk for this symbol (add shares or total cost to weigh this buy against your current portfolio)."
+
+    const watchTicker = addForm.ticker.trim().toUpperCase()
+    let cancelled = false
+    const t = setTimeout(async () => {
+      setAddRiskLoading(true)
+      setAddRiskError(null)
+      try {
+        const res = await authFetch("/api/risk-scores", {
+          method: "POST",
+          body: JSON.stringify({ holdings: spec.holdings }),
+        })
+        const data = (await res.json()) as {
+          risk_scores?: Record<string, StockRiskScore>
+          error?: string
+        }
+        if (cancelled) return
+        if (!res.ok) throw new Error(data.error ?? "Could not load risk scores.")
+        const row = data.risk_scores?.[watchTicker]
+        setAddRiskScore(row ?? null)
+        setAddRiskHint(hint)
+      } catch (e) {
+        if (!cancelled) {
+          setAddRiskScore(null)
+          setAddRiskHint("")
+          setAddRiskError(e instanceof Error ? e.message : "Risk preview failed.")
+        }
+      } finally {
+        if (!cancelled) setAddRiskLoading(false)
+      }
+    }, 480)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [
+    showAddForm,
+    user,
+    addForm.ticker,
+    addForm.name,
+    addForm.category,
+    addForm.shares,
+    addForm.cost_basis,
+    addLiveQuote,
+    portfolioData,
+  ])
 
   const pieData = useMemo(() => {
     return portfolioData.map((d) => ({
@@ -478,6 +625,61 @@ export default function DashboardPage() {
                     <p>No live quote for this symbol — enter shares and total cost manually.</p>
                   )}
                 </div>
+
+                {addForm.ticker.trim() && addForm.name.trim() && (
+                  <div className="mt-4 rounded-lg border border-amber-500/25 bg-amber-500/5 dark:bg-amber-950/20 px-3 py-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Shield className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      ML risk — this buy
+                    </div>
+                    {addRiskLoading && (
+                      <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Fetching vol, beta vs SPY, and macro stress…
+                      </p>
+                    )}
+                    {addRiskError && !addRiskLoading && (
+                      <p className="mt-2 text-xs text-destructive">{addRiskError}</p>
+                    )}
+                    {!addRiskLoading && addRiskScore && (
+                      <div className="mt-2 space-y-1.5 text-sm">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                          <span className="font-mono font-semibold">{addForm.ticker.trim().toUpperCase()}</span>
+                          <span
+                            className={
+                              addRiskScore.risk_score >= 67
+                                ? "text-amber-700 dark:text-amber-400"
+                                : addRiskScore.risk_score >= 34
+                                  ? "text-foreground"
+                                  : "text-green-700 dark:text-green-400"
+                            }
+                          >
+                            {addRiskScore.risk_score}/100 — {addRiskScore.label}
+                          </span>
+                        </div>
+                        {addRiskScore.portfolio_weight_pct != null && (
+                          <p className="text-xs text-muted-foreground">
+                            After this buy: ~{addRiskScore.portfolio_weight_pct.toFixed(1)}% of your preview
+                            portfolio · position risk index{" "}
+                            <span className="font-medium text-foreground">
+                              {addRiskScore.position_risk_index?.toFixed(1) ?? "—"}
+                            </span>
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground leading-relaxed">{addRiskScore.summary}</p>
+                      </div>
+                    )}
+                    {!addRiskLoading && !addRiskScore && !addRiskError && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Enter ticker and company name to load risk scores.
+                      </p>
+                    )}
+                    {addRiskHint && !addRiskLoading && addRiskScore && (
+                      <p className="mt-2 text-[11px] text-muted-foreground/90 leading-snug">{addRiskHint}</p>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2 mt-4">
                   <Button onClick={handleAddHolding} disabled={adding} className="gap-2">
                     {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}

@@ -66,6 +66,12 @@ export type StockRiskScore = {
     regime_stress_0_100: number;
     factors: Record<string, unknown>;
   };
+  /** Your allocation weight (0–1) when scores are computed in portfolio context. */
+  portfolio_weight?: number;
+  /** Same as portfolio_weight as a percent. */
+  portfolio_weight_pct?: number;
+  /** Intrinsic risk score × portfolio weight — simple “size-adjusted” exposure (0–100 scale). */
+  position_risk_index?: number;
 };
 
 export type XGBPrediction = {

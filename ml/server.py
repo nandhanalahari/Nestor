@@ -61,6 +61,26 @@ class AnalyzeRequest(BaseModel):
     window_end: str = ""
 
 
+class RiskScoresRequest(BaseModel):
+    """Holdings with positive weights (e.g. market-value weights) for portfolio context."""
+
+    holdings: list[Holding]
+
+
+def _enrich_scores_with_weights(risk_by_ticker: dict, weights: dict[str, float]) -> dict:
+
+    out: dict[str, dict] = {}
+    for t, row in risk_by_ticker.items():
+        w = float(weights.get(t, 0.0))
+        rs = float(row.get("risk_score", 0.0))
+        enriched = dict(row)
+        enriched["portfolio_weight"] = round(w, 6)
+        enriched["portfolio_weight_pct"] = round(w * 100.0, 2)
+        enriched["position_risk_index"] = round(rs * w, 2)
+        out[t] = enriched
+    return out
+
+
 SCENARIO_WINDOWS = {
     "market-drop": ("2020-01-01", "2020-06-01"),
     "inflation-spike": ("2021-06-01", "2022-12-31"),
@@ -119,15 +139,60 @@ async def analyze(req: AnalyzeRequest):
     except Exception as e:
         print(f"[risk_scores] {e}")
 
+    risk_weights = {
+        h.ticker.upper(): (h.weight / total if total > 0 else 1.0 / len(tickers))
+        for h in req.holdings
+    }
+    risk_scores_weighted = _enrich_scores_with_weights(risk_scores, risk_weights)
+
     return {
         "predictions": predictions,
         "optimization": optimization,
         "xgb_importance_text": importance_text,
         "macro_snapshot": macro_context,
-        "risk_scores": risk_scores,
+        "risk_scores": risk_scores_weighted,
         "scenario_id": req.scenario_id,
         "window": {"start": w_start, "end": w_end},
         "pipeline": "XGBoost (predictor) + FRED macro data → PyPortfolioOpt MVO with scenario-period data → Gemini (translator).",
+    }
+
+
+@app.post("/risk-scores")
+async def risk_scores_only(req: RiskScoresRequest):
+    """
+    Per-ticker risk (vol, beta vs SPY, FRED macro stress) plus portfolio weights.
+    Weights should reflect how much you hold or plan to invest in each name
+    (e.g. market value / total portfolio value).
+    """
+    if not req.holdings:
+        raise HTTPException(400, "No holdings provided")
+
+    total = sum(max(0.0, h.weight) for h in req.holdings)
+    if total <= 0:
+        n = len(req.holdings)
+        weights = {h.ticker.upper(): 1.0 / n for h in req.holdings}
+    else:
+        weights = {
+            h.ticker.upper(): max(0.0, h.weight) / total for h in req.holdings
+        }
+
+    tickers = list(weights.keys())
+
+    macro_context: dict = {}
+    try:
+        macro_context = get_macro_snapshot()
+    except Exception as e:
+        print(f"[FRED] risk-scores: {e}")
+
+    try:
+        raw_scores = compute_stock_risk_scores(tickers, macro_context)
+    except Exception as e:
+        raise HTTPException(500, f"Risk scores failed: {str(e)}")
+
+    enriched = _enrich_scores_with_weights(raw_scores, weights)
+    return {
+        "risk_scores": enriched,
+        "macro_snapshot": macro_context,
     }
 
 

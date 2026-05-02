@@ -4,11 +4,10 @@ import { runScenario, runCustomScenario } from "@/lib/scenario";
 import { explainRebalancing, resolveCustomScenarioFromPrompt } from "@/lib/gemini";
 import type { Holding, ScenarioId, RebalancingResult, ResolvedCustomScenario } from "@/lib/types";
 import { scenarios } from "@/lib/portfolio";
+import { mlAnalyze, mlMacro } from "@/lib/mlClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ML_API = process.env.ML_API_URL || "http://127.0.0.1:8000";
 
 type ScenarioBody = {
   scenarioId?: ScenarioId;
@@ -24,21 +23,6 @@ const PRESET_IDS = new Set<Exclude<ScenarioId, "custom">>([
 
 function isPresetId(id: unknown): id is Exclude<ScenarioId, "custom"> {
   return typeof id === "string" && PRESET_IDS.has(id as Exclude<ScenarioId, "custom">);
-}
-
-async function mlFetch(path: string, options: RequestInit, retries = 2): Promise<Response | null> {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const res = await fetch(`${ML_API}${path}`, {
-        ...options,
-        signal: AbortSignal.timeout(90_000),
-      });
-      return res;
-    } catch {
-      if (i < retries) await new Promise((r) => setTimeout(r, 2000));
-    }
-  }
-  return null;
 }
 
 function getSupabase(accessToken: string) {
@@ -187,33 +171,34 @@ export async function POST(req: Request) {
         mlPayload.window_end = resolvedCustom.windowEnd;
       }
 
-      const mlRes = await mlFetch("/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mlPayload),
-      });
+      let mlData: Record<string, unknown> | null = null;
+      try {
+        mlData = (await mlAnalyze(mlPayload)) as Record<string, unknown>;
+      } catch {
+        mlData = null;
+      }
 
-      if (mlRes?.ok) {
-        const mlData = await mlRes.json();
-        const opt = mlData.optimization;
-
+      const opt = mlData?.optimization as Record<string, unknown> | undefined;
+      if (opt && mlData) {
+        const cur = opt.current as Record<string, unknown>;
+        const mv = opt.min_volatility as Record<string, unknown>;
         const result: RebalancingResult = {
           scenarioId: scenarioIdForMl,
-          windowStart: mlData.window?.start || "",
-          windowEnd: mlData.window?.end || "",
-          originalAllocation: opt.current.weights,
-          newAllocation: opt.min_volatility.weights,
-          expectedRiskReduction: `${Math.max(0, opt.current.volatility - opt.min_volatility.volatility).toFixed(1)} pts`,
-          originalScenarioReturnPct: opt.current.expected_return,
-          newScenarioReturnPct: opt.min_volatility.expected_return,
-          originalVolPct: opt.current.volatility,
-          newVolPct: opt.min_volatility.volatility,
-          originalSharpe: opt.current.sharpe,
-          newSharpe: opt.min_volatility.sharpe,
-          maxDrawdownOriginal: opt.max_drawdown_current,
-          maxDrawdownOptimized: opt.max_drawdown_optimized,
-          riskContributions: opt.risk_contributions,
-          efficientFrontier: (opt.efficient_frontier || []).map(
+          windowStart: (mlData.window as { start?: string } | undefined)?.start || "",
+          windowEnd: (mlData.window as { end?: string } | undefined)?.end || "",
+          originalAllocation: cur.weights as RebalancingResult["originalAllocation"],
+          newAllocation: mv.weights as RebalancingResult["newAllocation"],
+          expectedRiskReduction: `${Math.max(0, Number(cur.volatility) - Number(mv.volatility)).toFixed(1)} pts`,
+          originalScenarioReturnPct: Number(cur.expected_return),
+          newScenarioReturnPct: Number(mv.expected_return),
+          originalVolPct: Number(cur.volatility),
+          newVolPct: Number(mv.volatility),
+          originalSharpe: Number(cur.sharpe),
+          newSharpe: Number(mv.sharpe),
+          maxDrawdownOriginal: Number(opt.max_drawdown_current),
+          maxDrawdownOptimized: Number(opt.max_drawdown_optimized),
+          riskContributions: (opt.risk_contributions as RebalancingResult["riskContributions"]) || {},
+          efficientFrontier: ((opt.efficient_frontier as []) || []).map(
             (p: { expectedReturn: number; volatility: number; sharpe: number }) => ({
               expectedReturn: p.expectedReturn,
               volatility: p.volatility,
@@ -224,14 +209,14 @@ export async function POST(req: Request) {
             tax: "Rebalancing may trigger taxable events. Consider tax-loss harvesting.",
             fees: "Check your broker for trading fees before executing.",
           },
-          actions: opt.actions || [],
-          predictions: mlData.predictions,
-          xgbImportanceText: mlData.xgb_importance_text,
-          pipeline: mlData.pipeline,
-          maxSharpe: opt.max_sharpe,
-          scenarioActualReturnCurrent: opt.scenario_actual_return_current,
-          scenarioActualReturnOptimized: opt.scenario_actual_return_optimized,
-          method: opt.method,
+          actions: (opt.actions as string[]) || [],
+          predictions: mlData.predictions as RebalancingResult["predictions"],
+          xgbImportanceText: mlData.xgb_importance_text as string | undefined,
+          pipeline: mlData.pipeline as string | undefined,
+          maxSharpe: opt.max_sharpe as RebalancingResult["maxSharpe"],
+          scenarioActualReturnCurrent: Number(opt.scenario_actual_return_current),
+          scenarioActualReturnOptimized: Number(opt.scenario_actual_return_optimized),
+          method: opt.method as string | undefined,
           riskScores: mlData.risk_scores as RebalancingResult["riskScores"],
         };
 
@@ -314,11 +299,10 @@ export async function POST(req: Request) {
 
     let macroSnapshot: Record<string, { name: string; value: number; change_1m?: number | null }> | undefined;
     try {
-      const macroRes = await fetch(`${ML_API}/macro`, { signal: AbortSignal.timeout(10_000) });
-      if (macroRes.ok) {
-        const macroData = await macroRes.json();
-        macroSnapshot = macroData.indicators;
-      }
+      const macroJson = (await mlMacro()) as {
+        indicators?: Record<string, { name: string; value: number; change_1m?: number | null }>;
+      };
+      macroSnapshot = macroJson.indicators;
     } catch {
       // optional
     }
