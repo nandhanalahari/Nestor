@@ -12,6 +12,8 @@ export async function POST(req: Request) {
     scenarioStory?: string;
     ownerName?: string;
     goalText?: string;
+    xgbImportanceText?: string;
+    macroContext?: Record<string, { name: string; value: number; change_1m?: number | null }>;
   } = {};
 
   try {
@@ -34,6 +36,8 @@ export async function POST(req: Request) {
       scenarioStory: body.scenarioStory,
       goalText: body.goalText,
       result: body.result,
+      xgbImportanceText: body.xgbImportanceText,
+      macroContext: body.macroContext,
     });
     return NextResponse.json({ explanation });
   } catch (error) {

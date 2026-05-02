@@ -235,8 +235,10 @@ export default function ScenariosPage() {
       >
         <h1 className="text-3xl font-bold text-foreground">What-If Scenarios</h1>
         <p className="text-muted-foreground mt-1">
-          Stress-test your portfolio with XGBoost predictions fed into Mean-Variance Optimization.
-          The model trains on your stocks&apos; historical data and predicts which assets will perform best.
+          Stress-test your portfolio with XGBoost predictions enhanced by FRED macroeconomic data,
+          fed into Mean-Variance Optimization. The model trains on your stocks&apos; historical data
+          plus real economic indicators (Fed rate, inflation, unemployment, VIX) to predict which
+          assets will perform best.
         </p>
       </motion.div>
 
@@ -296,9 +298,9 @@ export default function ScenariosPage() {
                     <RefreshCw className="w-8 h-8 text-primary" />
                   </motion.div>
                   <div className="text-center">
-                    <p className="text-muted-foreground font-medium">Running XGBoost + MVO Pipeline...</p>
+                    <p className="text-muted-foreground font-medium">Running XGBoost + FRED Macro + MVO Pipeline...</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Training XGBoost on historical data → Predicting returns → Optimizing via Efficient Frontier
+                      Fetching FRED macro data → Training XGBoost on historical + macro features → Optimizing via Efficient Frontier
                     </p>
                   </div>
                 </div>
@@ -315,7 +317,7 @@ export default function ScenariosPage() {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-6"
           >
-            {/* AI Explanation */}
+            {/* AI Explanation — Structured with Transparency */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -325,15 +327,78 @@ export default function ScenariosPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Shield className="w-5 h-5 text-primary" />
-                    <CardTitle>AI Recommendation</CardTitle>
+                    <CardTitle>AI-Powered Recommendation</CardTitle>
                   </div>
-                  <CardDescription className="text-base mt-2 leading-relaxed">
-                    {recommendation.explanation}
-                  </CardDescription>
-                  {recommendation.meta && (
-                    <p className="mt-2 text-xs text-muted-foreground">{recommendation.meta}</p>
-                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Powered by XGBoost predictions + FRED macroeconomic data → Gemini translation
+                  </p>
                 </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {(() => {
+                      // Parse structured sections from Gemini response
+                      const text = recommendation.explanation || "";
+                      const sections = text.split(/\*\*([^*]+)\*\*/).filter(Boolean);
+                      
+                      const sectionConfig: Record<string, { icon: typeof Shield; color: string }> = {
+                        "what happened": { icon: AlertTriangle, color: "text-red-500" },
+                        "why this matters now": { icon: Activity, color: "text-blue-500" },
+                        "what we recommend": { icon: Shield, color: "text-green-500" },
+                        "costs & taxes": { icon: DollarSign, color: "text-amber-500" },
+                        "how this fits your goal": { icon: TrendingUp, color: "text-purple-500" },
+                      };
+
+                      // If the response has sections, render them nicely
+                      if (sections.length > 1) {
+                        const rendered: React.ReactNode[] = [];
+                        for (let i = 0; i < sections.length; i++) {
+                          const part = sections[i].trim();
+                          if (!part) continue;
+                          
+                          const lowerPart = part.toLowerCase().replace(/:$/, "");
+                          const config = sectionConfig[lowerPart];
+                          
+                          if (config && i + 1 < sections.length) {
+                            const Icon = config.icon;
+                            const body = sections[i + 1].trim();
+                            rendered.push(
+                              <div key={i} className="flex gap-3">
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <Icon className={`w-4 h-4 ${config.color}`} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                    {part.replace(/:$/, "")}
+                                  </p>
+                                  <p className="text-sm text-foreground/90 leading-relaxed">
+                                    {body}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                            i++; // Skip the body part
+                          }
+                        }
+                        if (rendered.length > 0) return rendered;
+                      }
+                      
+                      // Fallback: render as plain text
+                      return (
+                        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
+                          {text}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                  {recommendation.meta && (
+                    <p className="mt-4 pt-3 border-t text-xs text-muted-foreground">{recommendation.meta}</p>
+                  )}
+                  {recommendation.method && (
+                    <p className="mt-1 text-xs text-muted-foreground/70 font-mono">
+                      {recommendation.method}
+                    </p>
+                  )}
+                </CardContent>
               </Card>
             </motion.div>
 

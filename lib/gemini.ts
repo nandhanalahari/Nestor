@@ -20,6 +20,7 @@ export type ExplanationContext = {
   goalText?: string;
   result: RebalancingResult;
   xgbImportanceText?: string;
+  macroContext?: Record<string, { name: string; value: number; change_1m?: number | null }>;
 };
 
 export async function explainRebalancing(
@@ -33,11 +34,41 @@ export async function explainRebalancing(
 
   const xgbSection = context.xgbImportanceText
     ? `
-The XGBoost model analyzed historical price, volume, and momentum data for each stock. Here's what drove its predictions:
+The XGBoost model analyzed historical price, volume, momentum data AND macroeconomic indicators (Fed rate, inflation, unemployment, treasury yields, VIX) for each stock. Here's what drove its predictions:
 ${context.xgbImportanceText}
 
-Use this to explain WHY the model expects certain stocks to do better or worse. Translate the feature names into simple concepts (e.g., "12-month momentum" means "how much the stock has been trending up or down over the past year").`
+Translate the feature names into simple concepts. For macro features:
+- "fed_funds_rate" = the interest rate the Fed sets (higher = harder for growth stocks, better for savings)
+- "cpi_yoy" = how fast prices are rising (inflation rate)
+- "unemployment" = how many people are out of work
+- "yield_spread" = difference between long and short term rates (negative = recession warning)
+- "vix" = how scared the market is (higher = more volatility expected)`
     : "";
+
+  // Build FRED macro context section
+  let macroSection = "";
+  if (context.macroContext && Object.keys(context.macroContext).length > 0) {
+    const macroLines: string[] = [];
+    for (const [, info] of Object.entries(context.macroContext)) {
+      if (info.value !== undefined) {
+        const changeStr = info.change_1m != null ? ` (${info.change_1m > 0 ? "+" : ""}${info.change_1m}% vs last month)` : "";
+        macroLines.push(`- ${info.name}: ${info.value}${changeStr}`);
+      }
+    }
+    if (macroLines.length > 0) {
+      macroSection = `
+
+CURRENT MACROECONOMIC ENVIRONMENT (from FRED — Federal Reserve Economic Data):
+${macroLines.join("\n")}
+
+IMPORTANT: Use this macro data to ground your explanation in reality. For example:
+- If the Fed rate is high (>4%), explain that borrowing costs are elevated which hurts growth stocks but benefits bond yields
+- If inflation (CPI YoY) is >3%, note that cash loses purchasing power and TIPS/real assets may be better
+- If VIX is >20, explain that the market expects turbulence
+- If the yield curve is inverted (10Y < 2Y), warn that this historically signals recession within 12-18 months
+- Connect the macro environment to WHY specific rebalancing moves make sense RIGHT NOW`;
+    }
+  }
 
   const scenarioActualCurrent = context.result.scenarioActualReturnCurrent;
   const scenarioActualOpt = context.result.scenarioActualReturnOptimized;
@@ -51,16 +82,39 @@ ACTUAL HISTORICAL PERFORMANCE during the scenario period:
 - Difference: ${(scenarioActualOpt - scenarioActualCurrent).toFixed(1)} percentage points`
       : "";
 
+  // Build action cost estimates
+  const actions = context.result.actions || [];
+  const numTrades = actions.length;
+  const estimatedTradingCost = numTrades * 2; // ~$2 per trade average
+  const taxSection = `
+COST & TAX TRANSPARENCY:
+- Number of trades needed: ${numTrades}
+- Estimated trading costs: ~$${estimatedTradingCost} (varies by broker; many brokers offer $0 commission on stocks/ETFs)
+- Tax considerations: Selling positions at a gain triggers capital gains tax. Short-term gains (<1 year held) are taxed as ordinary income. Long-term gains (>1 year) get a lower tax rate (0-20%). If any position is at a LOSS, selling it can offset other gains (tax-loss harvesting — this is actually helpful).
+- Net tax impact: Rebalancing inside a tax-advantaged account (401k, IRA, Roth IRA) has ZERO tax impact. In a taxable account, focus on selling losers first.`;
+
+  const goalSection = context.goalText
+    ? `
+USER'S INVESTMENT GOAL: "${context.goalText}"
+Explain how this rebalancing aligns with their specific goal. Be concrete about how lower volatility, better Sharpe ratio, or reduced drawdown helps them reach their goal.`
+    : `
+USER'S INVESTMENT GOAL: Build a steady, calm investing habit.
+The user hasn't set a specific goal yet. Frame the recommendation in terms of building long-term wealth safely.`;
+
   const prompt = `You are Nestor, a wise and friendly financial guide for a beginner investor.
 
-The pipeline works in three steps:
-1. XGBoost (the "Eyes") predicted expected returns and risk for each stock based on historical patterns
+The pipeline works in four steps:
+1. XGBoost (the "Eyes") predicted expected returns and risk for each stock using both technical indicators AND macroeconomic data from the Federal Reserve (FRED)
 2. Mean-Variance Optimization (the "Hands") used REAL historical data from the ${context.scenarioTitle} period to find the safest portfolio allocation that would have survived that crisis
-3. You (the "Translator") explain it all in plain English
-${xgbSection}
+3. FRED macro data provides context about the CURRENT economic environment (interest rates, inflation, unemployment, etc.)
+4. You (the "Translator") explain it all in plain English — clearly, transparently, with costs and goal alignment
+${xgbSection}${macroSection}
+
+${goalSection}
+
+${taxSection}
 
 User: ${context.ownerName}
-Goal: ${context.goalText ?? "Build a steady, calm investing habit."}
 Scenario: ${context.scenarioTitle}
 What happened historically: ${context.scenarioStory}
 
@@ -70,15 +124,23 @@ Risk reduction: ${context.result.expectedRiskReduction}
 Annualized volatility: was ${context.result.originalVolPct.toFixed(1)}%, now ${context.result.newVolPct.toFixed(1)}%
 Sharpe ratio: was ${context.result.originalSharpe.toFixed(2)}, now ${context.result.newSharpe.toFixed(2)}
 Max drawdown during scenario: was ${context.result.maxDrawdownOriginal.toFixed(1)}%, now ${context.result.maxDrawdownOptimized.toFixed(1)}%
-Risk contributions by asset: ${riskContrib || "N/A"}${actualPerfSection}
+Risk contributions by asset: ${riskContrib || "N/A"}
+Notes on tax: ${context.result.notes?.tax || "N/A"}
+Notes on fees: ${context.result.notes?.fees || "N/A"}${actualPerfSection}
 
-Explain in 4-5 short sentences:
-1. Specifically reference what would have happened to their actual portfolio during ${context.scenarioTitle} (use the actual % returns)
-2. Which holdings were the biggest "weak link" during this exact crisis
-3. Why the recommended changes would have helped (mention the drawdown improvement)
-4. End with one reassuring sentence
+Write your explanation in this exact structure (use these exact section headers):
 
-No jargon, no bullet points, no emojis. Write as if talking to a friend who just started investing.`;
+**What happened:** One sentence about what would have happened to their portfolio during ${context.scenarioTitle} (use actual % numbers).
+
+**Why this matters now:** One sentence connecting the CURRENT macro environment (use real FRED numbers like "with the Fed rate at X%" or "inflation running at Y%") to why this rebalancing is timely.
+
+**What we recommend:** Two sentences explaining the specific moves and WHY each one helps. Mention which holdings were the weak link and which are the safe haven. Translate the XGBoost feature importances into plain language.
+
+**Costs & taxes:** One sentence on estimated trading costs and tax implications. Be honest — if it's minimal, say so. If there are tax-loss harvesting opportunities, mention them.
+
+**How this fits your goal:** One sentence connecting the changes to their investment goal.
+
+Rules: No bullet points, no emojis. Use the section headers exactly as shown. Write warmly, as if talking to a friend who just started investing. Use SPECIFIC numbers from the data provided (don't make up numbers).`;
 
   const response = await ai.models.generateContent({
     model: MODEL,

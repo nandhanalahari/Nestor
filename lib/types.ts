@@ -88,6 +88,13 @@ export type RebalancingResult = {
   scenarioActualReturnCurrent?: number;
   scenarioActualReturnOptimized?: number;
   method?: string;
+  maxSharpe?: {
+    weights: Record<string, number>;
+    expected_return: number;
+    volatility: number;
+    sharpe: number;
+  };
+  macroSnapshot?: Record<string, { name: string; value: number; change_1m?: number | null }>;
 };
 
 export type Goal = {

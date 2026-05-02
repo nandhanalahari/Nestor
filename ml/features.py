@@ -1,11 +1,33 @@
 """Feature engineering for XGBoost predictor.
 
-Takes raw Alpha Vantage price data and computes technical features that
-XGBoost uses to predict forward returns and volatility.
+Takes raw price data and computes technical features that XGBoost uses
+to predict forward returns and volatility.
+
+Now augmented with FRED macroeconomic indicators:
+  - Federal Funds Rate, CPI (YoY inflation), Unemployment
+  - 10Y/2Y Treasury yields, Yield curve spread
+  - VIX, rate-of-change features
 """
 
 import numpy as np
 import pandas as pd
+
+# Lazy import to avoid circular dependency at module load time
+_macro_df_cache: pd.DataFrame | None = None
+
+
+def _get_macro_df() -> pd.DataFrame | None:
+    """Lazy-load macro data once. Returns None if FRED unavailable."""
+    global _macro_df_cache
+    if _macro_df_cache is not None:
+        return _macro_df_cache
+    try:
+        from fred_data import get_macro_features_monthly
+        _macro_df_cache = get_macro_features_monthly()
+        return _macro_df_cache
+    except Exception as e:
+        print(f"[Features] FRED macro data unavailable: {e}")
+        return None
 
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -45,6 +67,15 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     rolling_max = out["adj_close"].cummax()
     out["drawdown"] = (out["adj_close"] - rolling_max) / rolling_max
 
+    # ── FRED Macro Features ──
+    macro_df = _get_macro_df()
+    if macro_df is not None and len(macro_df) > 0:
+        try:
+            from fred_data import merge_macro_with_prices
+            out = merge_macro_with_prices(out, macro_df)
+        except Exception as e:
+            print(f"[Features] Could not merge macro data: {e}")
+
     # Forward return (target) — 1 month ahead
     out["fwd_return_1m"] = out["adj_close"].pct_change().shift(-1)
     # Forward volatility (target) — 3 month ahead std
@@ -54,6 +85,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 FEATURE_COLS = [
+    # Technical features
     "return_1m", "return_3m", "return_6m", "return_12m",
     "vol_3m", "vol_6m", "vol_12m",
     "momentum_6m", "momentum_12m",
@@ -61,6 +93,16 @@ FEATURE_COLS = [
     "hl_range_6m",
     "div_yield_12m",
     "drawdown",
+    # FRED macro features (gracefully skipped if unavailable)
+    "fed_funds_rate",
+    "cpi_yoy",
+    "unemployment",
+    "treasury_10y",
+    "treasury_2y",
+    "yield_spread",
+    "vix",
+    "fed_funds_change_3m",
+    "vix_ma_3m",
 ]
 
 FEATURE_DESCRIPTIONS = {
@@ -77,4 +119,14 @@ FEATURE_DESCRIPTIONS = {
     "hl_range_6m": "Average price swing (high-low range)",
     "div_yield_12m": "12-month dividend yield",
     "drawdown": "Current drawdown from peak",
+    # FRED macro descriptions for Gemini explanations
+    "fed_funds_rate": "Federal Funds interest rate (set by the Fed)",
+    "cpi_yoy": "Year-over-year inflation rate (CPI)",
+    "unemployment": "National unemployment rate",
+    "treasury_10y": "10-year Treasury bond yield",
+    "treasury_2y": "2-year Treasury bond yield",
+    "yield_spread": "Yield curve spread (10Y minus 2Y, negative = inverted)",
+    "vix": "Market fear index (VIX)",
+    "fed_funds_change_3m": "Fed rate change over last 3 months",
+    "vix_ma_3m": "3-month average VIX level",
 }

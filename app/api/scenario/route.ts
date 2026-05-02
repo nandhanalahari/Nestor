@@ -52,6 +52,7 @@ export async function POST(req: Request) {
 
   let holdings: Holding[] | undefined;
   let userId: string | undefined;
+  let userGoalText: string | undefined;
 
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
@@ -89,6 +90,21 @@ export async function POST(req: Request) {
               weight: totalCost > 0 ? Number(h.cost_basis) / totalCost : 0,
             }),
           );
+        }
+
+        // Fetch user's investment goal for Gemini context
+        try {
+          const { data: goals } = await supabase
+            .from("goals")
+            .select("text")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          if (goals && goals.length > 0) {
+            userGoalText = goals[0].text;
+          }
+        } catch {
+          // Goal fetch is non-critical
         }
       }
     } catch {
@@ -161,8 +177,10 @@ export async function POST(req: Request) {
             ownerName: "Investor",
             scenarioTitle: body.scenarioId,
             scenarioStory: `Scenario window: ${result.windowStart} to ${result.windowEnd}`,
+            goalText: userGoalText,
             result,
             xgbImportanceText: mlData.xgb_importance_text,
+            macroContext: mlData.macro_snapshot,
           });
         } catch {
           explanation =
@@ -215,13 +233,27 @@ export async function POST(req: Request) {
   try {
     const bundle = await runScenario(body.scenarioId, holdings);
 
+    // Try to fetch FRED macro data for fallback path too
+    let macroSnapshot: Record<string, { name: string; value: number; change_1m?: number | null }> | undefined;
+    try {
+      const macroRes = await fetch(`${ML_API}/macro`, { signal: AbortSignal.timeout(10_000) });
+      if (macroRes.ok) {
+        const macroData = await macroRes.json();
+        macroSnapshot = macroData.indicators;
+      }
+    } catch {
+      // ML pipeline may not be running; macro is optional
+    }
+
     let explanation = "";
     try {
       explanation = await explainRebalancing({
         ownerName: "Investor",
         scenarioTitle: bundle.scenario.title,
         scenarioStory: bundle.scenario.marketStory,
+        goalText: userGoalText,
         result: bundle.result,
+        macroContext: macroSnapshot,
       });
     } catch {
       explanation =
