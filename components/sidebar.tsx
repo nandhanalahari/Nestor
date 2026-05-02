@@ -15,6 +15,8 @@ import {
   Home,
   LogOut,
   User,
+  History,
+  Flame,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth-provider"
@@ -23,6 +25,8 @@ import { signOut } from "@/lib/supabase/auth"
 const navItems = [
   { href: "/", label: "Home", icon: Home },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/history", label: "History", icon: History },
+  { href: "/trending", label: "Trending", icon: Flame },
   { href: "/scenarios", label: "What-If Scenarios", icon: GitBranch },
   { href: "/goals", label: "My Goals", icon: Target },
 ]

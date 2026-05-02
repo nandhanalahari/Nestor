@@ -18,6 +18,7 @@ import {
   Loader2,
   AlertCircle,
   BarChart3,
+  RefreshCw,
 } from "lucide-react"
 import {
   PieChart as RechartsPie,
@@ -87,6 +88,22 @@ export default function DashboardPage() {
     cost_basis: "",
   })
   const [adding, setAdding] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const refreshPrices = useCallback(async (tickers: string[]) => {
+    if (tickers.length === 0) return
+    setRefreshing(true)
+    try {
+      await authFetch("/api/cache", {
+        method: "POST",
+        body: JSON.stringify({ tickers }),
+      })
+    } catch {
+      // ignore
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
 
   const loadPortfolio = useCallback(async () => {
     setFetching(true)
@@ -213,7 +230,7 @@ export default function DashboardPage() {
             {isEmpty
               ? "Add your first holding to get started."
               : payload?.asOf
-                ? `Live quotes as of ${payload.asOf} via Alpha Vantage.`
+                ? `Quotes as of ${payload.asOf} (cached · no API calls on load).`
                 : "Loading your portfolio..."}
           </p>
           {loadError && (
@@ -228,10 +245,27 @@ export default function DashboardPage() {
             </p>
           ) : null}
         </div>
-        <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Add Holding
-        </Button>
+        <div className="flex gap-2">
+          {payload && payload.holdings.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const tickers = payload.holdings.map((h) => h.ticker)
+                await refreshPrices(tickers)
+                await loadPortfolio()
+              }}
+              disabled={refreshing}
+              className="gap-2"
+            >
+              {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Refresh Prices
+            </Button>
+          )}
+          <Button onClick={() => setShowAddForm(!showAddForm)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Add Holding
+          </Button>
+        </div>
       </motion.div>
 
       <AnimatePresence>
@@ -367,9 +401,9 @@ export default function DashboardPage() {
                   <TrendingUp className="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">Alpha Vantage</div>
+                  <div className="text-2xl font-bold">Cached</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Real-time quotes · {payload?.asOf ?? ""}
+                    Marketstack EOD · {payload?.asOf ?? ""}
                   </p>
                 </CardContent>
               </Card>
