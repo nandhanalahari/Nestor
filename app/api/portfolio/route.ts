@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getLiveQuotes } from "@/lib/yahooFinance";
 import type { Holding, Quote } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -78,86 +79,23 @@ export async function GET(req: Request) {
     }),
   );
 
-  // Read from stock_cache instead of calling Alpha Vantage
-  const tickers = holdings.filter((h) => h.category !== "Cash").map((h) => h.ticker);
-  const quotes: Quote[] = [];
+  // Live quotes from Yahoo Finance (free, no API key, with 1-min server cache)
+  const tickers = holdings
+    .filter((h) => h.category !== "Cash")
+    .map((h) => h.ticker);
+
+  const liveQuotes = await getLiveQuotes(tickers);
+  const quotes: Quote[] = liveQuotes.map((q) => ({
+    ticker: q.ticker,
+    price: Math.round(q.price * 100) / 100,
+    changePercent: Math.round(q.changePercent * 100) / 100,
+    asOf: q.asOf,
+  }));
+
   const warnings: string[] = [];
-
-  if (tickers.length > 0) {
-    const { data: cachedQuotes } = await supabase
-      .from("stock_cache")
-      .select("*")
-      .in("ticker", tickers);
-
-    const missingTickers: string[] = [];
-
-    for (const h of holdings) {
-      if (h.category === "Cash") continue;
-      const cached = cachedQuotes?.find(
-        (c: { ticker: string }) => c.ticker === h.ticker,
-      );
-      if (cached) {
-        quotes.push({
-          ticker: h.ticker,
-          price: Number(cached.price),
-          changePercent: Number(cached.change_percent),
-          asOf: cached.as_of,
-        });
-      } else {
-        missingTickers.push(h.ticker);
-      }
-    }
-
-    // If cache is empty for some tickers, try to populate via the cache API internally
-    if (missingTickers.length > 0) {
-      try {
-        const { getEODLatest } = await import("@/lib/marketstack");
-        const eodData = await getEODLatest(missingTickers);
-        for (const entry of eodData) {
-          const changePct =
-            entry.open > 0
-              ? ((entry.close - entry.open) / entry.open) * 100
-              : 0;
-          const asOf = entry.date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
-
-          quotes.push({
-            ticker: entry.symbol,
-            price: entry.close,
-            changePercent: Math.round(changePct * 100) / 100,
-            asOf,
-          });
-
-          // Store in cache for next time
-          await supabase.from("stock_cache").upsert(
-            {
-              ticker: entry.symbol,
-              price: entry.close,
-              change_percent: Math.round(changePct * 100) / 100,
-              as_of: asOf,
-              volume: entry.volume,
-              high: entry.high,
-              low: entry.low,
-              open: entry.open,
-              source: "marketstack",
-              fetched_at: new Date().toISOString(),
-            },
-            { onConflict: "ticker" },
-          );
-        }
-
-        // Any still missing after Marketstack
-        for (const ticker of missingTickers) {
-          if (!quotes.find((q) => q.ticker === ticker)) {
-            warnings.push(`No price data available for ${ticker}`);
-          }
-        }
-      } catch (err) {
-        for (const ticker of missingTickers) {
-          warnings.push(
-            `No cached price for ${ticker}. Click "Refresh Prices" to fetch.`,
-          );
-        }
-      }
+  for (const ticker of tickers) {
+    if (!quotes.find((q) => q.ticker === ticker)) {
+      warnings.push(`Could not fetch live price for ${ticker}`);
     }
   }
 

@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from predictor import predict_all, format_importance_for_gemini
 from optimizer import optimize_portfolio
+from lstm_predictor import predict_all_lstm, predict_for_ticker
 
 # Load env from parent .env.local
 env_path = os.path.join(os.path.dirname(__file__), "..", ".env.local")
@@ -84,6 +85,14 @@ async def analyze(req: AnalyzeRequest):
     xgb_result = predict_all(tickers)
     predictions = xgb_result["predictions"]
 
+    # ── Step 1b: EYES — LSTM predictions (in parallel concept) ──
+    try:
+        lstm_result = predict_all_lstm(tickers, forecast_days=30)
+        lstm_predictions = lstm_result["predictions"]
+    except Exception as e:
+        lstm_predictions = {}
+        print(f"[LSTM] Failed: {e}")
+
     # ── Step 2: HANDS — MVO optimization ──
     window = SCENARIO_WINDOWS.get(req.scenario_id, ("", ""))
     w_start = req.window_start or window[0]
@@ -103,17 +112,41 @@ async def analyze(req: AnalyzeRequest):
 
     return {
         "predictions": predictions,
+        "lstm_predictions": lstm_predictions,
         "optimization": optimization,
         "xgb_importance_text": importance_text,
         "scenario_id": req.scenario_id,
         "window": {"start": w_start, "end": w_end},
-        "pipeline": "XGBoost (predictor) → PyPortfolioOpt MVO (optimizer) → Gemini (translator)",
+        "pipeline": "XGBoost + LSTM (predictors) → PyPortfolioOpt MVO (optimizer) → Gemini (translator)",
+    }
+
+
+class ForecastRequest(BaseModel):
+    tickers: list[str]
+    days: int = 30
+
+
+@app.post("/forecast")
+async def forecast(req: ForecastRequest):
+    """
+    LSTM forecast endpoint for the dashboard.
+    Returns predicted prices for the next N days for each ticker.
+    """
+    if not req.tickers:
+        raise HTTPException(400, "No tickers provided")
+
+    tickers = [t.upper() for t in req.tickers]
+    result = predict_all_lstm(tickers, forecast_days=req.days)
+    return {
+        "predictions": result["predictions"],
+        "errors": result["errors"],
+        "model": "LSTM (PyTorch, 2-layer, 60-day window)",
     }
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "pipeline": "XGBoost + PyPortfolioOpt + Gemini"}
+    return {"status": "ok", "pipeline": "XGBoost + LSTM + PyPortfolioOpt + Gemini"}
 
 
 if __name__ == "__main__":

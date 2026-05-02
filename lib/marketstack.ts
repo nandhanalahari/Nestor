@@ -12,6 +12,9 @@ async function msFetch<T>(endpoint: string, params: Record<string, string> = {})
   const search = new URLSearchParams({ access_key: getApiKey(), ...params });
   const url = `${BASE}${endpoint}?${search.toString()}`;
   const res = await fetch(url, { cache: "no-store" });
+  if (res.status === 429) {
+    throw new Error("RATE_LIMITED");
+  }
   if (!res.ok) throw new Error(`Marketstack HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }

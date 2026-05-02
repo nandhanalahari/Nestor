@@ -48,6 +48,17 @@ export type XGBPrediction = {
   error?: string;
 };
 
+export type LSTMPrediction = {
+  ticker: string;
+  current_price?: number;
+  predicted_return: number;
+  predicted_vol: number;
+  forecast: { date: string; price: number }[];
+  history_days?: number;
+  model?: string;
+  error?: string;
+};
+
 export type RebalancingResult = {
   scenarioId: ScenarioId;
   windowStart: string;
@@ -71,6 +82,7 @@ export type RebalancingResult = {
   };
   actions: string[];
   predictions?: Record<string, XGBPrediction>;
+  lstmPredictions?: Record<string, LSTMPrediction>;
   xgbImportanceText?: string;
   pipeline?: string;
 };

@@ -37,7 +37,7 @@ import {
   LineChart,
   Line,
 } from "recharts"
-import type { RebalancingResult, ScenarioId, FrontierPoint, XGBPrediction } from "@/lib/types"
+import type { RebalancingResult, ScenarioId, FrontierPoint, XGBPrediction, LSTMPrediction } from "@/lib/types"
 import { authFetch } from "@/lib/api"
 
 const scenarioCards = [
@@ -98,6 +98,7 @@ interface Recommendation {
   frontier?: FrontierPoint[]
   actions?: string[]
   predictions?: Record<string, XGBPrediction>
+  lstmPredictions?: Record<string, LSTMPrediction>
   pipeline?: string
 }
 
@@ -119,6 +120,7 @@ type ScenarioBundle = {
   scenario: { title: string; marketStory: string }
   result: RebalancingResult & {
     predictions?: Record<string, XGBPrediction>
+    lstmPredictions?: Record<string, LSTMPrediction>
     xgbImportanceText?: string
     pipeline?: string
   }
@@ -182,6 +184,7 @@ export default function ScenariosPage() {
         frontier: bundle.result.efficientFrontier,
         actions: bundle.result.actions,
         predictions: bundle.result.predictions,
+        lstmPredictions: bundle.result.lstmPredictions,
         pipeline: bundle.result.pipeline,
       })
     } catch (e) {
@@ -445,6 +448,93 @@ export default function ScenariosPage() {
                           )}
                           {pred.error && (
                             <p className="text-xs text-amber-600 dark:text-amber-400">Fallback: {pred.error}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* LSTM Predictions */}
+            {recommendation.lstmPredictions && Object.keys(recommendation.lstmPredictions).length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.19 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-blue-500" />
+                      LSTM 30-Day Forecast
+                    </CardTitle>
+                    <CardDescription>
+                      A 2-layer LSTM neural network trained on 5 years of price history per stock
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Object.entries(recommendation.lstmPredictions).map(([ticker, pred]) => (
+                        <div key={ticker} className="rounded-lg border p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-semibold text-foreground">{ticker}</span>
+                            <span
+                              className={`text-sm font-medium ${
+                                (pred.predicted_return ?? 0) > 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              {(pred.predicted_return ?? 0) > 0 ? "+" : ""}
+                              {(pred.predicted_return ?? 0).toFixed(2)}%
+                            </span>
+                          </div>
+                          {pred.current_price !== undefined && (
+                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                              <span>Current</span>
+                              <span>${pred.current_price.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {pred.forecast?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                              <span>30-day target</span>
+                              <span>${pred.forecast[pred.forecast.length - 1].price.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <span>Annualized vol</span>
+                            <span>{(pred.predicted_vol ?? 0).toFixed(1)}%</span>
+                          </div>
+                          {pred.forecast?.length > 0 && (
+                            <div className="pt-2 border-t">
+                              <div className="h-12">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart
+                                    data={pred.forecast.map((p) => ({
+                                      date: p.date,
+                                      price: p.price,
+                                    }))}
+                                  >
+                                    <Line
+                                      type="monotone"
+                                      dataKey="price"
+                                      stroke="hsl(199, 89%, 48%)"
+                                      strokeWidth={2}
+                                      dot={false}
+                                    />
+                                    <Tooltip
+                                      formatter={(v: number) => `$${v.toFixed(2)}`}
+                                      contentStyle={{ fontSize: "11px" }}
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          )}
+                          {pred.error && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400">{pred.error}</p>
                           )}
                         </div>
                       ))}

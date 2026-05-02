@@ -19,6 +19,8 @@ import {
   AlertCircle,
   BarChart3,
   RefreshCw,
+  Activity,
+  Sparkles,
 } from "lucide-react"
 import {
   PieChart as RechartsPie,
@@ -31,6 +33,9 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts"
 import type { Holding, Quote } from "@/lib/types"
 import { usd } from "@/lib/format"
@@ -89,6 +94,40 @@ export default function DashboardPage() {
   })
   const [adding, setAdding] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+
+  type ForecastPoint = { date: string; price: number }
+  type LSTMForecast = {
+    ticker: string
+    current_price?: number
+    predicted_return: number
+    forecast: ForecastPoint[]
+    error?: string
+  }
+  const [forecasts, setForecasts] = useState<Record<string, LSTMForecast>>({})
+  const [forecastLoading, setForecastLoading] = useState(false)
+  const [forecastError, setForecastError] = useState<string | null>(null)
+
+  const fetchForecast = useCallback(async (tickers: string[]) => {
+    if (tickers.length === 0) return
+    setForecastLoading(true)
+    setForecastError(null)
+    try {
+      const res = await authFetch("/api/forecast", {
+        method: "POST",
+        body: JSON.stringify({ tickers, days: 30 }),
+      })
+      const data = await res.json()
+      if (res.ok && data.predictions) {
+        setForecasts(data.predictions)
+      } else {
+        setForecastError(data.error || "Could not run LSTM forecast")
+      }
+    } catch (e) {
+      setForecastError(e instanceof Error ? e.message : "Forecast failed")
+    } finally {
+      setForecastLoading(false)
+    }
+  }, [])
 
   const refreshPrices = useCallback(async (tickers: string[]) => {
     if (tickers.length === 0) return
@@ -230,7 +269,7 @@ export default function DashboardPage() {
             {isEmpty
               ? "Add your first holding to get started."
               : payload?.asOf
-                ? `Quotes as of ${payload.asOf} (cached · no API calls on load).`
+                ? `Live quotes as of ${payload.asOf} via Yahoo Finance.`
                 : "Loading your portfolio..."}
           </p>
           {loadError && (
@@ -401,9 +440,9 @@ export default function DashboardPage() {
                   <TrendingUp className="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">Cached</div>
+                  <div className="text-2xl font-bold">Yahoo Finance</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Marketstack EOD · {payload?.asOf ?? ""}
+                    Live · {payload?.asOf ?? ""}
                   </p>
                 </CardContent>
               </Card>
@@ -560,6 +599,135 @@ export default function DashboardPage() {
                     </motion.div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* LSTM Price Forecast */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+          >
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader className="flex flex-row items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-blue-500" />
+                    LSTM 30-Day Price Forecast
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    A 2-layer LSTM neural network predicts the next 30 trading days
+                    for each holding using 5 years of price history.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => fetchForecast(portfolioData.map((d) => d.ticker))}
+                  disabled={forecastLoading || portfolioData.length === 0}
+                  className="gap-2"
+                >
+                  {forecastLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Activity className="w-4 h-4" />
+                  )}
+                  {Object.keys(forecasts).length > 0 ? "Re-run" : "Run Forecast"}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {forecastError && (
+                  <p className="text-sm text-destructive mb-3">{forecastError}</p>
+                )}
+                {forecastLoading && (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Training LSTM models... this may take 1-2 minutes per stock.
+                    </p>
+                  </div>
+                )}
+                {!forecastLoading && Object.keys(forecasts).length === 0 && !forecastError && (
+                  <div className="text-center py-8">
+                    <Sparkles className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      Click &quot;Run Forecast&quot; to generate LSTM price predictions for your holdings.
+                    </p>
+                  </div>
+                )}
+                {Object.keys(forecasts).length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Object.entries(forecasts).map(([ticker, f]) => {
+                      if (f.error) {
+                        return (
+                          <div key={ticker} className="rounded-lg border p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-mono font-semibold">{ticker}</span>
+                              <span className="text-xs text-amber-600 dark:text-amber-400">
+                                Error
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{f.error}</p>
+                          </div>
+                        )
+                      }
+
+                      const isUp = f.predicted_return > 0
+                      const targetPrice =
+                        f.forecast?.length > 0
+                          ? f.forecast[f.forecast.length - 1].price
+                          : 0
+
+                      return (
+                        <div key={ticker} className="rounded-lg border p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <span className="font-mono font-semibold text-foreground">{ticker}</span>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                ${f.current_price?.toFixed(2)} → ${targetPrice.toFixed(2)}
+                              </p>
+                            </div>
+                            <span
+                              className={`text-sm font-semibold ${
+                                isUp
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              {isUp ? "+" : ""}{f.predicted_return.toFixed(2)}%
+                            </span>
+                          </div>
+                          <div className="h-32">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={f.forecast}>
+                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                <XAxis
+                                  dataKey="date"
+                                  fontSize={10}
+                                  tick={{ fontSize: 10 }}
+                                  tickFormatter={(d) => d.slice(5)}
+                                />
+                                <YAxis fontSize={10} tickFormatter={(v) => `$${v}`} />
+                                <Tooltip
+                                  formatter={(v: number) => [`$${v.toFixed(2)}`, "Price"]}
+                                  labelStyle={{ fontSize: "11px" }}
+                                  contentStyle={{ fontSize: "11px" }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="price"
+                                  stroke={isUp ? "hsl(142, 71%, 45%)" : "hsl(355, 78%, 56%)"}
+                                  strokeWidth={2}
+                                  dot={false}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>

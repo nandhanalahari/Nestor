@@ -146,6 +146,7 @@ export async function POST(req: Request) {
           },
           actions: opt.actions || [],
           predictions: mlData.predictions,
+          lstmPredictions: mlData.lstm_predictions,
           xgbImportanceText: mlData.xgb_importance_text,
           pipeline: mlData.pipeline,
           maxSharpe: opt.max_sharpe,
