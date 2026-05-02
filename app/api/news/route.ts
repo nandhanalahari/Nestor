@@ -3,6 +3,9 @@ import { fetchCompanyNews, fetchMarketNews } from "@/lib/finnhub";
 import { analyzeNewsItems } from "@/lib/gemini";
 import type { NewsItem } from "@/lib/types";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Simple in-memory cache keyed by sorted tickers hash
 const cache = new Map<string, { data: NewsItem[]; expiresAt: number }>();
 
@@ -112,8 +115,8 @@ export async function GET(request: Request) {
     // 4. Send batch to Gemini for cause-effect analysis
     if (finalNews.length > 0) {
       const geminiAnalysis = await analyzeNewsItems(
-        finalNews.map(item => ({ headline: item.headline, summary: item.summary })),
-        tickers
+        finalNews.map((item) => ({ headline: item.headline, summary: item.summary })),
+        tickers,
       );
 
       if (geminiAnalysis && geminiAnalysis.length === finalNews.length) {
@@ -132,15 +135,33 @@ export async function GET(request: Request) {
       }
     }
 
-    // 5. Update cache (15 minutes)
-    cache.set(cacheKey, {
-      data: finalNews,
-      expiresAt: now + 15 * 60 * 1000,
-    });
+    // 5. Update cache (15 minutes; skip caching empty to allow quick recovery after key setup)
+    if (finalNews.length > 0) {
+      cache.set(cacheKey, {
+        data: finalNews,
+        expiresAt: now + 15 * 60 * 1000,
+      });
+    }
 
-    return NextResponse.json({ news: finalNews });
+    const hasFinnhub = Boolean(process.env.FINNHUB_API_KEY);
+    return NextResponse.json({
+      news: finalNews,
+      tickersRequested: tickers,
+      source: "finnhub+gemini",
+      ...(finalNews.length === 0 && {
+        hint: hasFinnhub
+          ? "No headlines returned from Finnhub for this window. Try again later."
+          : "Add FINNHUB_API_KEY to .env.local for Live Events (see Finnhub dashboard).",
+      }),
+    });
   } catch (error) {
     console.error("News API error:", error);
-    return NextResponse.json({ error: "Failed to fetch news" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Failed to fetch news",
+        detail: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
   }
 }

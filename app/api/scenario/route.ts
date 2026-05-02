@@ -1,18 +1,37 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { runScenario } from "@/lib/scenario";
-import { explainRebalancing } from "@/lib/gemini";
+import { runScenario, runCustomScenario } from "@/lib/scenario";
+import { explainRebalancing, resolveCustomScenarioFromPrompt } from "@/lib/gemini";
 import { calculateTaxPreview } from "@/lib/tax";
 import { estimateTradeFees } from "@/lib/fees";
 import { CURATED_ASSETS } from "@/lib/curatedAssets";
 import { getLiveQuotes } from "@/lib/yahooFinance";
 import { isMockDataEnabled, mockGoals, mockHoldings, mockQuotes, MOCK_USER_ID } from "@/lib/mockData";
-import type { Holding, ScenarioId } from "@/lib/types";
+import type { Holding, ScenarioId, RebalancingResult, ResolvedCustomScenario } from "@/lib/types";
+import { scenarios } from "@/lib/portfolio";
+import { mlAnalyze, mlMacro } from "@/lib/mlClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ML_API = process.env.ML_API_URL || "http://127.0.0.1:8000";
+type PresetScenarioId = Exclude<ScenarioId, "custom">;
+
+type ScenarioBody = {
+  scenarioId?: ScenarioId;
+  customPrompt?: string;
+};
+
+const PRESET_IDS = new Set<PresetScenarioId>([
+  "market-drop",
+  "inflation-spike",
+  "recession",
+  "tech-boom",
+]);
+
+function isPresetId(id: unknown): id is PresetScenarioId {
+  return typeof id === "string" && PRESET_IDS.has(id as PresetScenarioId);
+}
 
 type DbHolding = {
   ticker: string;
@@ -26,13 +45,12 @@ type DbHolding = {
 async function mlFetch(path: string, options: RequestInit, retries = 2): Promise<Response | null> {
   for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(`${ML_API}${path}`, {
+      return await fetch(`${ML_API}${path}`, {
         ...options,
         signal: AbortSignal.timeout(90_000),
       });
-      return res;
     } catch {
-      if (i < retries) await new Promise((r) => setTimeout(r, 2000));
+      if (i < retries) await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
   return null;
@@ -173,19 +191,65 @@ function buildFeeEstimate(
 }
 
 export async function POST(req: Request) {
-  let body: { scenarioId?: ScenarioId } = {};
+  let body: ScenarioBody = {};
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (!body.scenarioId) {
+  const trimmedPrompt =
+    typeof body.customPrompt === "string" ? body.customPrompt.trim() : "";
+  const hasCustom = trimmedPrompt.length > 0;
+  const hasPreset = Boolean(body.scenarioId && body.scenarioId !== "custom");
+
+  if (hasCustom && hasPreset) {
     return NextResponse.json(
-      { error: "scenarioId is required." },
+      { error: "Send either scenarioId (preset) or customPrompt, not both." },
       { status: 400 },
     );
   }
+  if (!hasCustom && !hasPreset) {
+    return NextResponse.json(
+      { error: "scenarioId or customPrompt is required." },
+      { status: 400 },
+    );
+  }
+  if (body.scenarioId === "custom") {
+    return NextResponse.json(
+      {
+        error:
+          'For a custom historical scenario, send customPrompt instead of scenarioId "custom".',
+      },
+      { status: 400 },
+    );
+  }
+
+  let resolvedCustom: ResolvedCustomScenario | undefined;
+  let activePresetId: PresetScenarioId | undefined;
+  let userPromptForResponse: string | undefined;
+
+  if (hasCustom) {
+    try {
+      resolvedCustom = await resolveCustomScenarioFromPrompt(trimmedPrompt);
+      userPromptForResponse = trimmedPrompt;
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Could not resolve scenario.",
+        },
+        { status: 400 },
+      );
+    }
+  } else {
+    if (!isPresetId(body.scenarioId)) {
+      return NextResponse.json({ error: "Unknown scenarioId." }, { status: 400 });
+    }
+    activePresetId = body.scenarioId;
+  }
+
+  const scenarioIdForMl: ScenarioId = resolvedCustom ? "custom" : activePresetId!;
 
   let holdings: Holding[] | undefined;
   let dbHoldingsForTax: DbHolding[] | undefined;
@@ -295,7 +359,7 @@ export async function POST(req: Request) {
             category: h.category,
             weight: h.weight,
           })),
-          scenario_id: body.scenarioId,
+          scenario_id: scenarioIdForMl,
         }),
       });
 
@@ -304,7 +368,7 @@ export async function POST(req: Request) {
         const opt = mlData.optimization;
 
         const result = {
-          scenarioId: body.scenarioId,
+          scenarioId: scenarioIdForMl,
           windowStart: mlData.window?.start || "",
           windowEnd: mlData.window?.end || "",
           originalAllocation: opt.current.weights,
@@ -363,7 +427,7 @@ export async function POST(req: Request) {
         try {
           explanation = await explainRebalancing({
             ownerName: "Investor",
-            scenarioTitle: body.scenarioId,
+            scenarioTitle: String(scenarioIdForMl),
             scenarioStory: `Scenario window: ${result.windowStart} to ${result.windowEnd}`,
             goalText: userGoalText,
             result,
@@ -381,7 +445,7 @@ export async function POST(req: Request) {
             await supabase.from("rebalance_proposals").insert({
               user_id: userId,
               scenario_id: result.scenarioId,
-              scenario_title: body.scenarioId,
+              scenario_title: String(scenarioIdForMl),
               original_allocation: result.originalAllocation,
               recommended_allocation: result.newAllocation,
               risk_reduction: result.expectedRiskReduction,
@@ -403,7 +467,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
           scenario: {
-            title: body.scenarioId,
+            title: String(scenarioIdForMl),
             marketStory: `XGBoost predicted returns → PyPortfolioOpt MVO`,
           },
           result,
@@ -421,7 +485,9 @@ export async function POST(req: Request) {
 
   // ── Fallback: TypeScript MVO engine ──
   try {
-    const bundle = await runScenario(body.scenarioId, holdings);
+    const bundle = resolvedCustom
+      ? await runCustomScenario(resolvedCustom, holdings)
+      : await runScenario(activePresetId!, holdings);
     const taxPreview = await buildTaxPreview(
       dbHoldingsForTax,
       bundle.result.originalAllocation,

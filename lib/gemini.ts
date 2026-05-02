@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
-import type { RebalancingResult } from "./types";
+import { assertValidResolvedCustomScenario } from "./customScenario";
+import type { RebalancingResult, ResolvedCustomScenario } from "./types";
 
 let cachedClient: GoogleGenAI | null = null;
 
@@ -12,6 +13,85 @@ function getClient() {
 }
 
 const MODEL = "gemini-2.5-flash";
+
+export async function resolveCustomScenarioFromPrompt(
+  userPrompt: string,
+): Promise<ResolvedCustomScenario> {
+  const ai = getClient();
+  const trimmed = userPrompt.trim();
+  if (trimmed.length < 10) {
+    throw new Error("Describe the scenario in a sentence or two.");
+  }
+  if (trimmed.length > 2000) {
+    throw new Error("That prompt is too long. Try a shorter question.");
+  }
+
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const safeUser = trimmed.replace(/"""/g, '"');
+
+  const prompt = `You map a retail investor's "what if" question to ONE real historical episode that moved US equities.
+
+QUESTION:
+"""${safeUser}"""
+
+Return JSON ONLY (no markdown fence), exactly:
+{
+  "title": "<short UI title, max 8 words>",
+  "eventName": "<widely recognized name of the episode>",
+  "year": <one integer year most central to the episode>,
+  "windowStart": "YYYY-MM-DD",
+  "windowEnd": "YYYY-MM-DD",
+  "marketStory": "<2-4 factual sentences on how markets behaved in that window; neutral tone>"
+}
+
+Hard rules:
+- windowStart and windowEnd bound the period when the risk showed up in diversified stocks (roughly 2-18 months).
+- windowEnd must be strictly before ${todayUtc} (entire window in the past).
+- windowStart < windowEnd. Dates must be valid Gregorian calendar days.
+- Choose a REAL event (war shock, oil shock, crash, panic, taper tantrum, COVID crash, etc.). No fictional futures.
+- If the user is vague, pick the closest well-known analog (e.g. generic "bank stress" -> 2008-09 financial crisis).
+- If the text is nonsense with no market link, still output JSON for the March 2020 COVID crash window (2020-02-20 through 2020-05-31 approximately) and set eventName/title accordingly.
+
+Return only a single JSON object.`;
+
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: prompt,
+  });
+  const text = response.text?.trim() ?? "";
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Could not resolve a historical scenario from that prompt.");
+  }
+
+  let rawUnknown: unknown;
+  try {
+    rawUnknown = JSON.parse(jsonMatch[0]) as unknown;
+  } catch {
+    throw new Error("Model returned invalid JSON for the scenario.");
+  }
+
+  const raw = rawUnknown as Partial<ResolvedCustomScenario>;
+  const yearRaw = raw.year;
+  const year =
+    typeof yearRaw === "number" && Number.isFinite(yearRaw)
+      ? yearRaw
+      : typeof yearRaw === "string"
+        ? parseInt(yearRaw, 10)
+        : NaN;
+
+  const resolved: ResolvedCustomScenario = {
+    title: String(raw.title ?? "").trim(),
+    eventName: String(raw.eventName ?? "").trim(),
+    year,
+    windowStart: String(raw.windowStart ?? "").trim(),
+    windowEnd: String(raw.windowEnd ?? "").trim(),
+    marketStory: String(raw.marketStory ?? "").trim(),
+  };
+
+  assertValidResolvedCustomScenario(resolved);
+  return resolved;
+}
 
 export type ExplanationContext = {
   ownerName: string;
@@ -101,14 +181,29 @@ Explain how this rebalancing aligns with their specific goal. Be concrete about 
 USER'S INVESTMENT GOAL: Build a steady, calm investing habit.
 The user hasn't set a specific goal yet. Frame the recommendation in terms of building long-term wealth safely.`;
 
+  let riskScoreSection = "";
+  if (context.result.riskScores && Object.keys(context.result.riskScores).length > 0) {
+    const lines = Object.entries(context.result.riskScores).map(([t, r]) => {
+      const vol = r.yahoo?.annualized_vol_pct ?? 0;
+      const beta = r.yahoo?.beta_vs_spy ?? 1;
+      const macroS = r.macro?.regime_stress_0_100 ?? 0;
+      return `${t}: ${r.risk_score}/100 (${r.label}) — vol ~${vol}%, beta vs SPY ${beta}, macro stress ${macroS}/100. ${r.summary}`;
+    });
+    riskScoreSection = `
+
+PER-STOCK RISK SCORES (0–100, higher = more risk; from price history / beta vs SPY and current FRED macro stress):
+${lines.join("\n")}
+Mention these scores when you explain which holdings are riskier vs more defensive.`;
+  }
+
   const prompt = `You are Nestor, a wise and friendly financial guide for a beginner investor.
 
 The pipeline works in four steps:
-1. XGBoost (the "Eyes") predicted expected returns and risk for each stock using both technical indicators AND macroeconomic data from the Federal Reserve (FRED)
+1. XGBoost (the "Eyes") predicted expected returns and risk for each stock using both technical indicators AND macroeconomic data from the Federal Reserve (FRED). Separate risk scores combine Yahoo-style price volatility / beta with the same FRED snapshot.
 2. Mean-Variance Optimization (the "Hands") used REAL historical data from the ${context.scenarioTitle} period to find the safest portfolio allocation that would have survived that crisis
 3. FRED macro data provides context about the CURRENT economic environment (interest rates, inflation, unemployment, etc.)
 4. You (the "Translator") explain it all in plain English — clearly, transparently, with costs and goal alignment
-${xgbSection}${macroSection}
+${xgbSection}${macroSection}${riskScoreSection}
 
 ${goalSection}
 

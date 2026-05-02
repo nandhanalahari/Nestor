@@ -12,7 +12,14 @@ import {
   buildCovarianceMatrix,
 } from "./optimization";
 import { scenarios, safeHaven, holdingsToWeights } from "./portfolio";
-import type { Holding, RebalancingResult, ScenarioId, FrontierPoint } from "./types";
+import type {
+  Holding,
+  RebalancingResult,
+  ScenarioId,
+  Scenario,
+  ResolvedCustomScenario,
+  FrontierPoint,
+} from "./types";
 
 const defaultHoldings: Holding[] = [
   { ticker: "SPY", name: "S&P 500 ETF", category: "ETF", amount: 10000, weight: 0.4 },
@@ -22,28 +29,54 @@ const defaultHoldings: Holding[] = [
 ];
 
 export type ScenarioBundle = {
-  scenario: (typeof scenarios)[number];
+  scenario: Scenario;
   result: RebalancingResult;
   series: Record<string, { date: string; close: number }[]>;
   source: "live" | "fallback";
   warnings: string[];
 };
 
+export function scenarioFromResolved(resolved: ResolvedCustomScenario): Scenario {
+  return {
+    id: "custom",
+    title: resolved.title,
+    question: `What if ${resolved.eventName} (${resolved.year})?`,
+    description: `${resolved.eventName} — ${resolved.year}`,
+    marketStory: resolved.marketStory,
+    windowStart: resolved.windowStart,
+    windowEnd: resolved.windowEnd,
+  };
+}
+
+export async function runCustomScenario(
+  resolved: ResolvedCustomScenario,
+  holdings?: Holding[],
+): Promise<ScenarioBundle> {
+  return executeScenario(scenarioFromResolved(resolved), holdings);
+}
+
 export async function runScenario(
-  scenarioId: ScenarioId,
+  scenarioId: Exclude<ScenarioId, "custom">,
   holdings?: Holding[],
 ): Promise<ScenarioBundle> {
   const scenario = scenarios.find((s) => s.id === scenarioId);
   if (!scenario) throw new Error(`Unknown scenario ${scenarioId}`);
+  return executeScenario(scenario, holdings);
+}
 
-  const effectiveHoldings = holdings && holdings.length > 0 ? holdings : defaultHoldings;
+async function executeScenario(
+  scenario: Scenario,
+  maybeHoldings?: Holding[],
+): Promise<ScenarioBundle> {
+  const effectiveHoldings =
+    maybeHoldings && maybeHoldings.length > 0 ? maybeHoldings : defaultHoldings;
 
   const tickers = Array.from(
     new Set([...effectiveHoldings.map((h) => h.ticker), safeHaven.ticker]),
   );
 
   const warnings: string[] = [];
-  if (!holdings || holdings.length === 0) {
+  if (!maybeHoldings || maybeHoldings.length === 0) {
     warnings.push("No holdings found. Using sample portfolio (SPY/QQQ/BND/VXUS). Add your holdings to personalize.");
   }
 
@@ -75,9 +108,9 @@ export async function runScenario(
     );
   }
 
-  if (source === "fallback") return fallbackResult(scenario, effectiveHoldings, warnings);
-
-  // ── Build return vectors ──
+  if (source === "fallback") {
+    return fallbackResult(scenario, effectiveHoldings, warnings);
+  }
 
   const returns: Record<string, number[]> = {};
   for (const ticker of tickers) {
@@ -92,12 +125,8 @@ export async function runScenario(
     if (!(t in initialWeights)) initialWeights[t] = 0;
   }
 
-  // ── Covariance matrix & base stats ──
-
   const cov = buildCovarianceMatrix(tickers, returns);
   const baseStats = portfolioStats(initialWeights, returns, cov);
-
-  // ── Bounds based on asset class ──
 
   const bounds: Record<string, { min: number; max: number }> = {};
   for (const ticker of tickers) {
@@ -105,7 +134,7 @@ export async function runScenario(
     if (ticker === safeHaven.ticker) {
       bounds[ticker] = { min: 0.05, max: 0.6 };
     } else if (h?.category === "Stock") {
-      bounds[ticker] = { min: 0.02, max: 0.40 };
+      bounds[ticker] = { min: 0.02, max: 0.4 };
     } else if (h?.category === "Bond ETF") {
       bounds[ticker] = { min: 0.05, max: 0.5 };
     } else {
@@ -113,49 +142,39 @@ export async function runScenario(
     }
   }
 
-  // ── Run MVO: minimize volatility ──
-
   const { weights: optimized, stats: optimizedStats } = optimizeMinVariance(
     initialWeights,
     returns,
     { bounds, step: 0.01, iterations: 3000 },
   );
 
-  // ── Compute Efficient Frontier ──
-
   let frontier: FrontierPoint[] = [];
   try {
-    frontier = computeEfficientFrontier(initialWeights, returns, { bounds }, 15)
-      .map((fp) => ({
+    frontier = computeEfficientFrontier(initialWeights, returns, { bounds }, 15).map(
+      (fp) => ({
         expectedReturn: fp.expectedReturn,
         volatility: fp.volatility,
         sharpe: fp.sharpe,
-      }));
+      }),
+    );
   } catch {
-    // Frontier computation is optional
+    // optional
   }
-
-  // ── Max drawdown ──
 
   const maxDDOriginal = portfolioMaxDrawdown(initialWeights, seriesByTicker);
   const maxDDOptimized = portfolioMaxDrawdown(optimized, seriesByTicker);
-
-  // ── Build result ──
 
   const horizon = Math.max(1, seriesByTicker[tickers[0]]?.length ?? 1);
   const baseScenarioReturn = baseStats.expectedReturn * horizon;
   const newScenarioReturn = optimizedStats.expectedReturn * horizon;
 
   const result: RebalancingResult = {
-    scenarioId,
+    scenarioId: scenario.id,
     windowStart: scenario.windowStart,
     windowEnd: scenario.windowEnd,
     originalAllocation: percentMap(initialWeights),
     newAllocation: percentMap(optimized),
-    expectedRiskReduction: percentDelta(
-      baseStats.volatility,
-      optimizedStats.volatility,
-    ),
+    expectedRiskReduction: percentDelta(baseStats.volatility, optimizedStats.volatility),
     originalScenarioReturnPct: baseScenarioReturn * 100,
     newScenarioReturnPct: newScenarioReturn * 100,
     originalVolPct: baseStats.annualizedVol * 100,
@@ -176,10 +195,7 @@ export async function runScenario(
   return { scenario, result, series: seriesByTicker, source, warnings };
 }
 
-function buildActionSummaries(
-  before: Record<string, number>,
-  after: Record<string, number>,
-) {
+function buildActionSummaries(before: Record<string, number>, after: Record<string, number>) {
   const tickers = new Set([...Object.keys(before), ...Object.keys(after)]);
   const moves: string[] = [];
   for (const ticker of tickers) {
@@ -211,7 +227,7 @@ function percentDelta(before: number, after: number) {
 }
 
 function fallbackResult(
-  scenario: (typeof scenarios)[number],
+  scenario: Scenario,
   holdings: Holding[],
   existingWarnings: string[] = [],
 ): ScenarioBundle {

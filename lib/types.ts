@@ -19,7 +19,22 @@ export type Quote = {
   asOf: string;
 };
 
-export type ScenarioId = "market-drop" | "inflation-spike" | "recession" | "tech-boom";
+export type ScenarioId =
+  | "market-drop"
+  | "inflation-spike"
+  | "recession"
+  | "tech-boom"
+  | "custom";
+
+/** Gemini maps a user question to a real historical stress window. */
+export type ResolvedCustomScenario = {
+  title: string;
+  eventName: string;
+  year: number;
+  windowStart: string;
+  windowEnd: string;
+  marketStory: string;
+};
 
 export type Scenario = {
   id: ScenarioId;
@@ -39,6 +54,27 @@ export type FrontierPoint = {
   sharpe: number;
 };
 
+export type StockRiskScore = {
+  risk_score: number;
+  label: string;
+  summary: string;
+  yahoo: {
+    annualized_vol_pct: number;
+    beta_vs_spy: number;
+    observation_days: number;
+  };
+  macro: {
+    regime_stress_0_100: number;
+    factors: Record<string, unknown>;
+  };
+  /** Your allocation weight (0–1) when scores are computed in portfolio context. */
+  portfolio_weight?: number;
+  /** Same as portfolio_weight as a percent. */
+  portfolio_weight_pct?: number;
+  /** Intrinsic risk score × portfolio weight — simple “size-adjusted” exposure (0–100 scale). */
+  position_risk_index?: number;
+};
+
 export type XGBPrediction = {
   ticker: string;
   predicted_return: number;
@@ -53,7 +89,7 @@ export type LSTMPrediction = {
   ticker: string;
   current_price?: number;
   predicted_return: number;
-  predicted_vol: number;
+  predicted_vol?: number;
   forecast: { date: string; price: number }[];
   history_days?: number;
   model?: string;
@@ -89,6 +125,7 @@ export type RebalancingResult = {
   scenarioActualReturnCurrent?: number;
   scenarioActualReturnOptimized?: number;
   method?: string;
+  riskScores?: Record<string, StockRiskScore>;
   maxSharpe?: {
     weights: Record<string, number>;
     expected_return: number;

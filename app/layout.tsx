@@ -19,8 +19,9 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: "Nestor - Smart Portfolio Management",
-  description: "AI-powered portfolio management for the everyday investor",
+  title: "Nestor — Invest with clarity",
+  description:
+    "Build a stock and ETF portfolio, stress-test with scenario-driven rebalancing, and track investments with AI explanations.",
   icons: {
     icon: [
       {

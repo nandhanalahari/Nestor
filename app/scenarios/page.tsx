@@ -46,7 +46,7 @@ const uiToApi: Record<string, ScenarioId> = {
   "tech-boom": "tech-boom",
 }
 
-const apiToUi: Record<ScenarioId, string> = {
+const apiToUi: Record<Exclude<ScenarioId, "custom">, string> = {
   "market-drop": "market-crash",
   "inflation-spike": "inflation",
   recession: "recession",
