@@ -17,6 +17,7 @@ import {
   Flame,
   ChevronUp,
   BookOpen,
+  Trophy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth-provider"
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/history", label: "History", icon: History },
   { href: "/trending", label: "Trending", icon: Flame },
   { href: "/scenarios", label: "What-If Scenarios", icon: GitBranch },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/lessons", label: "Trading School", icon: BookOpen },
   { href: "/goals", label: "My Goals", icon: Target },
 ]
