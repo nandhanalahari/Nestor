@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp } from "@/lib/supabase/auth";
+import { supabase } from "@/lib/supabase/client";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -30,15 +31,33 @@ export default function AuthPage() {
       if (err) {
         setError(err.message);
       } else {
-        setSuccess("Account created! Check your email to confirm, or sign in now.");
-        setMode("login");
+        // After signup, send user to onboarding quiz
+        // Auto-login so they have a session for the quiz
+        const { error: loginErr } = await signIn(email, password);
+        if (loginErr) {
+          setSuccess("Account created! Sign in to continue.");
+          setMode("login");
+        } else {
+          router.push("/onboarding");
+        }
       }
     } else {
       const { error: err } = await signIn(email, password);
       if (err) {
         setError(err.message);
       } else {
-        router.push("/dashboard");
+        // Check if user has completed onboarding
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch("/api/profile", {
+            headers: { Authorization: `Bearer ${session?.access_token}` },
+          });
+          // Also check localStorage fallback
+          const hasLocalProfile = !!localStorage.getItem("nestor_user_profile");
+          router.push((res.ok || hasLocalProfile) ? "/dashboard" : "/onboarding");
+        } catch {
+          router.push("/dashboard");
+        }
       }
     }
 

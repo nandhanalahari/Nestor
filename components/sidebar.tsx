@@ -1,22 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useTheme } from "next-themes"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
   GitBranch,
   Target,
-  Sun,
-  Moon,
   TrendingUp,
   Home,
   LogOut,
   User,
+  UserCircle,
   History,
   Flame,
+  ChevronUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth-provider"
@@ -34,15 +33,8 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { resolvedTheme, setTheme } = useTheme()
   const { user } = useAuth()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => { setMounted(true) }, [])
-
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === "light" ? "dark" : "light")
-  }
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const handleSignOut = async () => {
     await signOut()
@@ -112,12 +104,16 @@ export function Sidebar() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        className="mt-auto space-y-3"
+        className="mt-auto"
       >
         {user ? (
-          <div className="p-4 bg-accent rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+          <div className="bg-accent rounded-lg overflow-hidden">
+            {/* Clickable user info row */}
+            <button
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              className="w-full p-4 flex items-center gap-2 hover:bg-accent/80 transition-colors text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                 <User className="w-4 h-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
@@ -128,14 +124,49 @@ export function Sidebar() {
                   {user.email}
                 </p>
               </div>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-destructive transition-colors w-full mt-1"
-            >
-              <LogOut className="w-3 h-3" />
-              Sign out
+              <ChevronUp
+                className={cn(
+                  "w-4 h-4 text-muted-foreground transition-transform duration-200 flex-shrink-0",
+                  userMenuOpen ? "rotate-0" : "rotate-180"
+                )}
+              />
             </button>
+
+            {/* Expandable menu with My Profile + Sign out */}
+            <AnimatePresence>
+              {userMenuOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-3 pb-3 space-y-1">
+                    <Link
+                      href="/profile"
+                      onClick={() => setUserMenuOpen(false)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors w-full",
+                        pathname === "/profile"
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-background/60"
+                      )}
+                    >
+                      <UserCircle className="w-4 h-4" />
+                      My Profile
+                    </Link>
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-destructive hover:bg-background/60 transition-colors w-full"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign out
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
           <Link href="/auth">
@@ -145,29 +176,6 @@ export function Sidebar() {
             </div>
           </Link>
         )}
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={toggleTheme}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-lg hover:opacity-90 transition-opacity font-medium shadow-md"
-        >
-          {mounted ? (
-            resolvedTheme === "light" ? (
-              <>
-                <Moon className="w-4 h-4" />
-                Dark Mode
-              </>
-            ) : (
-              <>
-                <Sun className="w-4 h-4" />
-                Light Mode
-              </>
-            )
-          ) : (
-            <span className="h-4">Toggle Theme</span>
-          )}
-        </motion.button>
       </motion.div>
     </motion.aside>
   )
