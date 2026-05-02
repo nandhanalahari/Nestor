@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { computeHealthScore } from "@/lib/healthScore";
 import { getLiveQuotes } from "@/lib/yahooFinance";
 import type { Holding, Quote } from "@/lib/types";
 
@@ -51,6 +52,10 @@ export async function GET(req: Request) {
       dailyChangePct: 0,
       asOf: new Date().toISOString().slice(0, 10),
       warnings: [],
+      healthScore: null,
+      factors: [],
+      scoreDelta: null,
+      weeklyHigh: null,
     });
   }
 
@@ -99,23 +104,112 @@ export async function GET(req: Request) {
     }
   }
 
+  const marketValues: number[] = [];
   let totalValue = 0;
   for (const h of holdings) {
-    const q = quotes.find((q) => q.ticker === h.ticker);
-    if (q && h.shares) {
-      totalValue += q.price * h.shares;
-    } else {
-      totalValue += h.amount;
-    }
+    const q = quotes.find((x) => x.ticker === h.ticker);
+    const mv = q && h.shares ? q.price * h.shares : h.amount;
+    marketValues.push(mv);
+    totalValue += mv;
   }
+
+  const marketValueWeights =
+    totalValue > 0 ? marketValues.map((mv) => mv / totalValue) : [];
 
   const dailyChangePct =
     quotes.length > 0
       ? quotes.reduce((acc, q) => {
-          const h = holdings.find((h) => h.ticker === q.ticker);
+          const h = holdings.find((hh) => hh.ticker === q.ticker);
           return acc + q.changePercent * (h?.weight ?? 0);
         }, 0)
       : 0;
+
+  const { data: profileRow } = await supabase
+    .from("user_profiles")
+    .select("profile_label, liquidity_window_months")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const healthProfile =
+    profileRow &&
+    typeof profileRow.profile_label === "string" &&
+    typeof profileRow.liquidity_window_months === "number"
+      ? {
+          profile_label: profileRow.profile_label,
+          liquidity_window_months: profileRow.liquidity_window_months,
+        }
+      : null;
+
+  const { healthScore, factors } = computeHealthScore({
+    marketValueWeights,
+    dailyChangePct,
+    warnings,
+    profile: healthProfile,
+  });
+
+  const sevenDaysAgoIso = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const fourHoursAgoIso = new Date(
+    Date.now() - 4 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const [baselineRes, lastRecordedRes, weekScoresRes] = await Promise.all([
+    supabase
+      .from("health_score_history")
+      .select("score")
+      .eq("user_id", user.id)
+      .lte("recorded_at", sevenDaysAgoIso)
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("health_score_history")
+      .select("recorded_at")
+      .eq("user_id", user.id)
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("health_score_history")
+      .select("score")
+      .eq("user_id", user.id)
+      .gte("recorded_at", sevenDaysAgoIso),
+  ]);
+
+  const baselineScore = baselineRes.data?.score;
+  const scoreDelta =
+    baselineScore === undefined || baselineScore === null
+      ? null
+      : healthScore - Number(baselineScore);
+
+  const weekRows = weekScoresRes.data ?? [];
+  const weeklyHigh =
+    weekRows.length === 0
+      ? healthScore
+      : Math.max(
+          healthScore,
+          ...weekRows.map((r) => Number(r.score)),
+        );
+
+  const lastRecordedAt = lastRecordedRes.data?.recorded_at;
+  const lastMs = lastRecordedAt ? new Date(lastRecordedAt).getTime() : 0;
+  const fourHourCutoff = new Date(fourHoursAgoIso).getTime();
+  const shouldInsertHistory =
+    lastMs === 0 || lastMs < fourHourCutoff;
+
+  if (shouldInsertHistory) {
+    const { error: insertErr } = await supabase
+      .from("health_score_history")
+      .insert({ user_id: user.id, score: healthScore });
+
+    if (insertErr) {
+      console.error(
+        "[GET /api/portfolio] health_score_history insert:",
+        insertErr.message,
+      );
+    }
+  }
 
   return NextResponse.json({
     holdings,
@@ -124,5 +218,9 @@ export async function GET(req: Request) {
     dailyChangePct,
     asOf: quotes[0]?.asOf ?? new Date().toISOString().slice(0, 10),
     warnings,
+    healthScore,
+    factors,
+    scoreDelta,
+    weeklyHigh,
   });
 }

@@ -4,12 +4,19 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { ProfileLabel } from "@/lib/profile";
 
+/** Dashboard / portfolio context: delta vs ~7d baseline + rolling-week best score */
+export type RiskMeterPortfolioData = {
+  scoreDelta: number | null;
+  weeklyHigh: number | null;
+};
+
 type RiskMeterProps = {
   score: number; // 0–100
   label?: ProfileLabel;
   size?: number; // diameter in px
   showLabel?: boolean;
   animate?: boolean;
+  portfolioData?: RiskMeterPortfolioData | null;
 };
 
 /**
@@ -26,6 +33,7 @@ export function RiskMeter({
   size = 200,
   showLabel = true,
   animate = true,
+  portfolioData = null,
 }: RiskMeterProps) {
   const [displayScore, setDisplayScore] = useState(animate ? 0 : score);
 
@@ -140,6 +148,33 @@ export function RiskMeter({
           </span>
         </div>
       </div>
+
+      {portfolioData ? (
+        <div className="flex w-full max-w-[min(100%,280px)] flex-col items-center gap-1.5 px-1">
+          {portfolioData.scoreDelta !== null ? (
+            portfolioData.scoreDelta > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs font-semibold text-green-600 dark:text-green-400">
+                ↑ {portfolioData.scoreDelta} this week
+              </span>
+            ) : portfolioData.scoreDelta < 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">
+                ↓ {Math.abs(portfolioData.scoreDelta)} this week
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                — No change
+              </span>
+            )
+          ) : null}
+          <p className="text-center text-[11px] text-muted-foreground">
+            Weekly best:{" "}
+            {portfolioData.weeklyHigh !== null &&
+            portfolioData.weeklyHigh !== undefined
+              ? portfolioData.weeklyHigh
+              : "—"}
+          </p>
+        </div>
+      ) : null}
 
       {showLabel && label && (
         <motion.div
