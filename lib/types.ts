@@ -38,6 +38,16 @@ export type FrontierPoint = {
   sharpe: number;
 };
 
+export type XGBPrediction = {
+  ticker: string;
+  predicted_return: number;
+  predicted_vol: number;
+  feature_importances: Record<string, number>;
+  cv_rmse: number;
+  data_points: number;
+  error?: string;
+};
+
 export type RebalancingResult = {
   scenarioId: ScenarioId;
   windowStart: string;
@@ -60,6 +70,9 @@ export type RebalancingResult = {
     fees: string;
   };
   actions: string[];
+  predictions?: Record<string, XGBPrediction>;
+  xgbImportanceText?: string;
+  pipeline?: string;
 };
 
 export type Goal = {

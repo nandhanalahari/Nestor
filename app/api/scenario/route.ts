@@ -7,6 +7,8 @@ import type { Holding, ScenarioId } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const ML_API = process.env.ML_API_URL || "http://127.0.0.1:8000";
+
 function getSupabase(accessToken: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key =
@@ -79,10 +81,121 @@ export async function POST(req: Request) {
     }
   }
 
+  // ── Try XGBoost + PyPortfolioOpt Python pipeline first ──
+  if (holdings && holdings.length > 0) {
+    try {
+      const mlRes = await fetch(`${ML_API}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          holdings: holdings.map((h) => ({
+            ticker: h.ticker,
+            name: h.name,
+            category: h.category,
+            weight: h.weight,
+          })),
+          scenario_id: body.scenarioId,
+        }),
+      });
+
+      if (mlRes.ok) {
+        const mlData = await mlRes.json();
+        const opt = mlData.optimization;
+
+        const result = {
+          scenarioId: body.scenarioId,
+          windowStart: mlData.window?.start || "",
+          windowEnd: mlData.window?.end || "",
+          originalAllocation: opt.current.weights,
+          newAllocation: opt.min_volatility.weights,
+          expectedRiskReduction: `${Math.max(0, opt.current.volatility - opt.min_volatility.volatility).toFixed(1)} pts`,
+          originalScenarioReturnPct: opt.current.expected_return,
+          newScenarioReturnPct: opt.min_volatility.expected_return,
+          originalVolPct: opt.current.volatility,
+          newVolPct: opt.min_volatility.volatility,
+          originalSharpe: opt.current.sharpe,
+          newSharpe: opt.min_volatility.sharpe,
+          maxDrawdownOriginal: opt.max_drawdown_current,
+          maxDrawdownOptimized: opt.max_drawdown_optimized,
+          riskContributions: opt.risk_contributions,
+          efficientFrontier: (opt.efficient_frontier || []).map(
+            (p: { expectedReturn: number; volatility: number; sharpe: number }) => ({
+              expectedReturn: p.expectedReturn,
+              volatility: p.volatility,
+              sharpe: p.sharpe,
+            }),
+          ),
+          notes: {
+            tax: "Rebalancing may trigger taxable events. Consider tax-loss harvesting.",
+            fees: "Check your broker for trading fees before executing.",
+          },
+          actions: opt.actions || [],
+          predictions: mlData.predictions,
+          xgbImportanceText: mlData.xgb_importance_text,
+          pipeline: mlData.pipeline,
+          maxSharpe: opt.max_sharpe,
+        };
+
+        let explanation = "";
+        try {
+          explanation = await explainRebalancing({
+            ownerName: "Investor",
+            scenarioTitle: body.scenarioId,
+            scenarioStory: `Scenario window: ${result.windowStart} to ${result.windowEnd}`,
+            result,
+            xgbImportanceText: mlData.xgb_importance_text,
+          });
+        } catch {
+          explanation =
+            "The XGBoost model predicted expected returns for each asset, and the optimizer found a lower-risk allocation on the Efficient Frontier.";
+        }
+
+        if (userId && token) {
+          try {
+            const supabase = getSupabase(token);
+            await supabase.from("rebalance_proposals").insert({
+              user_id: userId,
+              scenario_id: result.scenarioId,
+              scenario_title: body.scenarioId,
+              original_allocation: result.originalAllocation,
+              recommended_allocation: result.newAllocation,
+              risk_reduction: result.expectedRiskReduction,
+              original_vol: result.originalVolPct,
+              new_vol: result.newVolPct,
+              original_sharpe: result.originalSharpe,
+              new_sharpe: result.newSharpe,
+              max_drawdown_original: result.maxDrawdownOriginal,
+              max_drawdown_optimized: result.maxDrawdownOptimized,
+              risk_contributions: result.riskContributions,
+              efficient_frontier: result.efficientFrontier,
+              explanation,
+              source: "xgboost-mvo",
+            });
+          } catch {
+            // Non-critical
+          }
+        }
+
+        return NextResponse.json({
+          scenario: {
+            title: body.scenarioId,
+            marketStory: `XGBoost predicted returns → PyPortfolioOpt MVO`,
+          },
+          result,
+          explanation,
+          source: "xgboost-mvo",
+          warnings: [],
+        });
+      }
+    } catch {
+      // Python backend not available — fall through to TypeScript engine
+    }
+  }
+
+  // ── Fallback: TypeScript MVO engine ──
   try {
     const bundle = await runScenario(body.scenarioId, holdings);
 
-    // Generate Gemini explanation
     let explanation = "";
     try {
       explanation = await explainRebalancing({
@@ -96,7 +209,6 @@ export async function POST(req: Request) {
         "The optimizer analyzed your portfolio using historical data and the covariance matrix to find a lower-risk allocation.";
     }
 
-    // Save proposal to Supabase if authenticated
     if (userId && token) {
       try {
         const supabase = getSupabase(token);
@@ -119,7 +231,7 @@ export async function POST(req: Request) {
           source: bundle.source,
         });
       } catch {
-        // Non-critical: don't fail the response
+        // Non-critical
       }
     }
 

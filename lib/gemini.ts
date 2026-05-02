@@ -19,6 +19,7 @@ export type ExplanationContext = {
   scenarioStory: string;
   goalText?: string;
   result: RebalancingResult;
+  xgbImportanceText?: string;
 };
 
 export async function explainRebalancing(
@@ -30,9 +31,21 @@ export async function explainRebalancing(
     .map(([t, pct]) => `${t}: ${pct}%`)
     .join(", ");
 
+  const xgbSection = context.xgbImportanceText
+    ? `
+The XGBoost model analyzed historical price, volume, and momentum data for each stock. Here's what drove its predictions:
+${context.xgbImportanceText}
+
+Use this to explain WHY the model expects certain stocks to do better or worse. Translate the feature names into simple concepts (e.g., "12-month momentum" means "how much the stock has been trending up or down over the past year").`
+    : "";
+
   const prompt = `You are Nestor, a wise and friendly financial guide for a beginner investor.
 
-The ML model ran Mean-Variance Optimization using real historical data from Alpha Vantage. It computed the covariance matrix (how assets move together) and found the minimum-volatility portfolio on the Efficient Frontier.
+The pipeline works in three steps:
+1. XGBoost (the "Eyes") predicted expected returns and risk for each stock based on historical patterns
+2. Mean-Variance Optimization (the "Hands") used those predictions to find the safest portfolio allocation
+3. You (the "Translator") explain it all in plain English
+${xgbSection}
 
 User: ${context.ownerName}
 Goal: ${context.goalText ?? "Build a steady, calm investing habit."}
@@ -47,7 +60,13 @@ Sharpe ratio: was ${context.result.originalSharpe.toFixed(2)}, now ${context.res
 Max drawdown: was ${context.result.maxDrawdownOriginal.toFixed(1)}%, now ${context.result.maxDrawdownOptimized.toFixed(1)}%
 Risk contributions by asset: ${riskContrib || "N/A"}
 
-Explain in 3-4 short sentences why the optimizer suggested these changes. Mention which asset was the biggest "weak link" during this historical period and why shifting weight helps. Reference the reduced drawdown if it's meaningful. End with one reassuring sentence. No jargon, no bullet points, no emojis. Write as if talking to a friend who just started investing.`;
+Explain in 4-5 short sentences:
+1. What the XGBoost model noticed about each stock (mention specific features like momentum or volatility in plain language)
+2. Why the optimizer shifted weight the way it did
+3. Reference the reduced drawdown or improved Sharpe ratio if meaningful
+4. End with one reassuring sentence
+
+No jargon, no bullet points, no emojis. Write as if talking to a friend who just started investing.`;
 
   const response = await ai.models.generateContent({
     model: MODEL,

@@ -37,7 +37,7 @@ import {
   LineChart,
   Line,
 } from "recharts"
-import type { RebalancingResult, ScenarioId, FrontierPoint } from "@/lib/types"
+import type { RebalancingResult, ScenarioId, FrontierPoint, XGBPrediction } from "@/lib/types"
 import { authFetch } from "@/lib/api"
 
 const scenarioCards = [
@@ -97,6 +97,8 @@ interface Recommendation {
   riskContributions?: Record<string, number>
   frontier?: FrontierPoint[]
   actions?: string[]
+  predictions?: Record<string, XGBPrediction>
+  pipeline?: string
 }
 
 const containerVariants = {
@@ -115,9 +117,13 @@ const itemVariants = {
 
 type ScenarioBundle = {
   scenario: { title: string; marketStory: string }
-  result: RebalancingResult
+  result: RebalancingResult & {
+    predictions?: Record<string, XGBPrediction>
+    xgbImportanceText?: string
+    pipeline?: string
+  }
   explanation?: string
-  source: "live" | "fallback"
+  source: "live" | "fallback" | "xgboost-mvo"
   warnings: string[]
 }
 
@@ -148,10 +154,15 @@ export default function ScenariosPage() {
         bundle.explanation ||
         "The optimizer analyzed your portfolio using the covariance matrix from historical data and found a lower-risk allocation."
 
+      const sourceLabel =
+        bundle.source === "xgboost-mvo"
+          ? "XGBoost predictions → PyPortfolioOpt MVO"
+          : bundle.source === "live"
+            ? "Live Alpha Vantage data + MVO engine"
+            : "Calibrated fallback"
+
       const metaParts = [
-        bundle.source === "live"
-          ? "Live Alpha Vantage data + MVO engine"
-          : "Calibrated fallback",
+        sourceLabel,
         ...(bundle.warnings ?? []),
       ]
 
@@ -170,6 +181,8 @@ export default function ScenariosPage() {
         riskContributions: bundle.result.riskContributions,
         frontier: bundle.result.efficientFrontier,
         actions: bundle.result.actions,
+        predictions: bundle.result.predictions,
+        pipeline: bundle.result.pipeline,
       })
     } catch (e) {
       setScenarioError(
@@ -213,8 +226,8 @@ export default function ScenariosPage() {
       >
         <h1 className="text-3xl font-bold text-foreground">What-If Scenarios</h1>
         <p className="text-muted-foreground mt-1">
-          Stress-test your portfolio against real historical crises. The ML engine uses
-          Mean-Variance Optimization with the covariance matrix from Alpha Vantage data.
+          Stress-test your portfolio with XGBoost predictions fed into Mean-Variance Optimization.
+          The model trains on your stocks&apos; historical data and predicts which assets will perform best.
         </p>
       </motion.div>
 
@@ -274,9 +287,9 @@ export default function ScenariosPage() {
                     <RefreshCw className="w-8 h-8 text-primary" />
                   </motion.div>
                   <div className="text-center">
-                    <p className="text-muted-foreground font-medium">Running Mean-Variance Optimization...</p>
+                    <p className="text-muted-foreground font-medium">Running XGBoost + MVO Pipeline...</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Fetching historical data, building covariance matrix, computing Efficient Frontier
+                      Training XGBoost on historical data → Predicting returns → Optimizing via Efficient Frontier
                     </p>
                   </div>
                 </div>
@@ -355,6 +368,91 @@ export default function ScenariosPage() {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* XGBoost Predictions */}
+            {recommendation.predictions && Object.keys(recommendation.predictions).length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-purple-500" />
+                      XGBoost Predictions
+                    </CardTitle>
+                    <CardDescription>
+                      The model predicted expected returns and volatility for each asset
+                      {recommendation.pipeline && (
+                        <span className="block mt-1 text-xs font-mono text-muted-foreground/70">
+                          {recommendation.pipeline}
+                        </span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Object.entries(recommendation.predictions).map(([ticker, pred]) => (
+                        <div
+                          key={ticker}
+                          className="rounded-lg border p-4 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-semibold text-foreground">{ticker}</span>
+                            <span
+                              className={`text-sm font-medium ${
+                                pred.predicted_return > 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              {pred.predicted_return > 0 ? "+" : ""}{pred.predicted_return}%
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <span>Predicted Vol</span>
+                            <span>{pred.predicted_vol}%</span>
+                          </div>
+                          {pred.cv_rmse > 0 && (
+                            <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+                              <span>CV RMSE</span>
+                              <span>{pred.cv_rmse}%</span>
+                            </div>
+                          )}
+                          {Object.keys(pred.feature_importances || {}).length > 0 && (
+                            <div className="pt-2 border-t space-y-1">
+                              <p className="text-xs text-muted-foreground font-medium">Top Drivers</p>
+                              {Object.entries(pred.feature_importances)
+                                .sort(([, a], [, b]) => b - a)
+                                .slice(0, 3)
+                                .map(([feat, pct]) => (
+                                  <div
+                                    key={feat}
+                                    className="flex items-center gap-2 text-xs"
+                                  >
+                                    <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-purple-500 rounded-full"
+                                        style={{ width: `${Math.min(pct, 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-muted-foreground w-28 truncate">{feat.replace(/_/g, " ")}</span>
+                                    <span className="text-muted-foreground/70 w-10 text-right">{pct}%</span>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                          {pred.error && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400">Fallback: {pred.error}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Allocation Comparison Chart */}
             <motion.div
@@ -592,7 +690,7 @@ export default function ScenariosPage() {
                     <div>
                       <p className="text-sm text-muted-foreground">This proposal has been saved to your account</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Method: Mean-Variance Optimization · Covariance matrix from historical returns · Efficient Frontier
+                        Pipeline: XGBoost (predictor) → PyPortfolioOpt MVO (optimizer) → Gemini (translator)
                       </p>
                     </div>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
