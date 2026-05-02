@@ -41,6 +41,7 @@ import type { Holding, Quote } from "@/lib/types"
 import { usd } from "@/lib/format"
 import { useAuth } from "@/components/auth-provider"
 import { authFetch } from "@/lib/api"
+import { NewsRail } from "@/components/NewsRail"
 
 type PortfolioPayload = {
   holdings: Holding[]
@@ -60,6 +61,16 @@ const COLORS = [
   "hsl(199, 89%, 48%)",
   "hsl(45, 93%, 47%)",
   "hsl(330, 81%, 60%)",
+]
+
+const STARTER_STOCKS = [
+  { ticker: "AAPL", name: "Apple Inc.", category: "Stock" },
+  { ticker: "MSFT", name: "Microsoft Corp.", category: "Stock" },
+  { ticker: "NVDA", name: "NVIDIA Corp.", category: "Stock" },
+  { ticker: "TSLA", name: "Tesla Inc.", category: "Stock" },
+  { ticker: "SPY", name: "SPDR S&P 500 ETF", category: "ETF" },
+  { ticker: "QQQ", name: "Invesco QQQ Trust", category: "ETF" },
+  { ticker: "BND", name: "Vanguard Total Bond Market ETF", category: "Bond ETF" },
 ]
 
 const containerVariants = {
@@ -307,6 +318,17 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
+      {/* Cause-Effect News Rail */}
+      {!isEmpty && portfolioData.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+        >
+          <NewsRail tickers={portfolioData.map(h => h.ticker)} />
+        </motion.div>
+      )}
+
       <AnimatePresence>
         {showAddForm && (
           <motion.div
@@ -320,6 +342,26 @@ export default function DashboardPage() {
                 <CardTitle className="text-lg">Add a Holding</CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="mb-4">
+                  <label className="text-sm font-medium text-muted-foreground block mb-1">Quick Select (Test Stocks)</label>
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const [ticker, name, category] = e.target.value.split("|");
+                      setAddForm({ ...addForm, ticker, name, category });
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Choose a starter stock...</option>
+                    {STARTER_STOCKS.map((s) => (
+                      <option key={s.ticker} value={`${s.ticker}|${s.name}|${s.category}`}>
+                        {s.ticker} - {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <Input
                     placeholder="Ticker (e.g. AAPL)"
@@ -334,7 +376,7 @@ export default function DashboardPage() {
                   <select
                     value={addForm.category}
                     onChange={(e) => setAddForm({ ...addForm, category: e.target.value })}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
                   >
                     <option value="Stock">Stock</option>
                     <option value="ETF">ETF</option>

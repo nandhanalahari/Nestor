@@ -180,3 +180,62 @@ Return only valid JSON.`;
     encouragement: string;
   };
 }
+
+export async function analyzeNewsItems(
+  items: { headline: string; summary: string }[],
+  userTickers: string[]
+) {
+  const ai = getClient();
+  const prompt = `You are Nestor, a financial guide. Review these ${items.length} news articles.
+For each article, analyze it in the context of a beginner investor who holds the following stocks: ${userTickers.join(", ") || "None specified"}.
+
+    Return a JSON array exactly matching the length and order of the input articles. For each article, provide:
+    1. "why": A single, simple sentence explaining WHY this happened.
+    2. "forYou": A single, simple sentence explaining what this means for their specific holdings (if related) OR the general market (if not).
+    3. "deepDive": A 1-2 paragraph simple explanation with more context.
+    4. "importance": "high" if this is a major market event (e.g., Fed rate change, major crash, huge earnings surprise for a held stock), otherwise "normal".
+    5. "impact": "Positive", "Negative", or "Neutral" based on how this affects their portfolio.
+    6. "jargon": An array of objects { "term": "...", "definition": "..." } identifying 0-2 complex financial terms in the summary and defining them simply. Return an empty array if none.
+    7. "takeaway": A single, reassuring sentence offering a mental model or educational suggestion (e.g., "Since your goal is long-term, this daily drop is normal market noise—no action needed.").
+
+    Articles to analyze:
+    ${items.map((item, i) => `[${i}] Headline: ${item.headline}\nSummary: ${item.summary}`).join("\n\n")}
+
+    Return ONLY a JSON array of objects. Example format:
+    [
+      {
+        "why": "Apple reported record iPhone sales in Q4.",
+        "forYou": "Since you hold AAPL, this is good news for your portfolio's growth.",
+        "deepDive": "Apple's new iPhone was a huge hit, driving their revenue up 20% compared to last year. For investors, this shows the company is still growing fast.",
+        "importance": "high",
+        "impact": "Positive",
+        "jargon": [{ "term": "Q4", "definition": "The fourth quarter of the financial year, usually October to December." }],
+        "takeaway": "Strong earnings like this support a long-term hold strategy."
+      }
+    ]`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+    });
+    const text = response.text?.trim() ?? "";
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error("Gemini response was not a JSON array.");
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) throw new Error("Parsed JSON is not an array.");
+    return parsed as {
+      why: string;
+      forYou: string;
+      deepDive: string;
+      importance: "high" | "normal";
+      impact: "Positive" | "Negative" | "Neutral";
+      jargon: { term: string; definition: string }[];
+      takeaway: string;
+    }[];
+  } catch (error) {
+    console.error("Gemini analyzeNewsItems error:", error);
+    return null;
+  }
+}
+
