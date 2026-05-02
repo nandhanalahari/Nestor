@@ -13,3 +13,17 @@ next-*.log
 __pycache__/
 *.pyc
 *.pyo
+
+# TypeScript incremental build output
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Local browser test profiles
+.chrome-test-profile/
+.edge-qa-profile/
+.edge-qa-profile2/
+.edge-qa-profile3/
+.tmp-edge-qa/
+
+# Stray PDFs at repo root
+/front page.pdf
