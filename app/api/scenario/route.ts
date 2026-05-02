@@ -9,6 +9,21 @@ export const dynamic = "force-dynamic";
 
 const ML_API = process.env.ML_API_URL || "http://127.0.0.1:8000";
 
+async function mlFetch(path: string, options: RequestInit, retries = 2): Promise<Response | null> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(`${ML_API}${path}`, {
+        ...options,
+        signal: AbortSignal.timeout(90_000),
+      });
+      return res;
+    } catch {
+      if (i < retries) await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  return null;
+}
+
 function getSupabase(accessToken: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key =
@@ -84,7 +99,7 @@ export async function POST(req: Request) {
   // ── Try XGBoost + PyPortfolioOpt Python pipeline first ──
   if (holdings && holdings.length > 0) {
     try {
-      const mlRes = await fetch(`${ML_API}/analyze`, {
+      const mlRes = await mlFetch("/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,7 +113,7 @@ export async function POST(req: Request) {
         }),
       });
 
-      if (mlRes.ok) {
+      if (mlRes?.ok) {
         const mlData = await mlRes.json();
         const opt = mlData.optimization;
 
