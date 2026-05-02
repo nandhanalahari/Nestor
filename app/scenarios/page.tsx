@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import type { Variants } from "framer-motion"
 import {
   Card,
   CardContent,
@@ -10,6 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Term } from "@/components/Term"
 import {
   TrendingDown,
   TrendingUp,
@@ -38,7 +40,9 @@ import {
   Line,
 } from "recharts"
 import type { RebalancingResult, ScenarioId, FrontierPoint, XGBPrediction, LSTMPrediction } from "@/lib/types"
+import type { TaxPreview as TaxPreviewData } from "@/lib/tax"
 import { authFetch } from "@/lib/api"
+import { TaxPreview } from "@/components/TaxPreview"
 
 const scenarioCards = [
   {
@@ -62,16 +66,16 @@ const scenarioCards = [
     title: "Recession",
     description: "What if we enter a deep recession?",
     icon: DollarSign,
-    color: "text-blue-500",
-    bgColor: "bg-blue-50 dark:bg-blue-900/20",
+    color: "text-primary",
+    bgColor: "bg-primary/10",
   },
   {
     id: "tech-boom",
     title: "Tech Boom",
     description: "What if tech surges like 2023-24?",
     icon: Zap,
-    color: "text-purple-500",
-    bgColor: "bg-purple-50 dark:bg-purple-900/20",
+    color: "text-foreground",
+    bgColor: "bg-accent",
   },
 ]
 
@@ -103,14 +107,15 @@ interface Recommendation {
   scenarioActualCurrent?: number
   scenarioActualOptimized?: number
   method?: string
+  taxPreview?: TaxPreviewData
 }
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
     y: 0,
@@ -130,6 +135,7 @@ type ScenarioBundle = {
   explanation?: string
   source: "live" | "fallback" | "xgboost-mvo"
   warnings: string[]
+  tax_preview?: TaxPreviewData | null
 }
 
 export default function ScenariosPage() {
@@ -157,13 +163,13 @@ export default function ScenariosPage() {
 
       const explanation =
         bundle.explanation ||
-        "The optimizer analyzed your portfolio using the covariance matrix from historical data and found a lower-risk allocation."
+        "The optimizer studied how your holdings have moved together and found a portfolio mix that may be less bumpy."
 
       const sourceLabel =
         bundle.source === "xgboost-mvo"
-          ? "XGBoost predictions → PyPortfolioOpt MVO"
+          ? "AI forecast + portfolio optimizer"
           : bundle.source === "live"
-            ? "Live Alpha Vantage data + MVO engine"
+            ? "Live market data + portfolio optimizer"
             : "Calibrated fallback"
 
       const metaParts = [
@@ -192,6 +198,7 @@ export default function ScenariosPage() {
         scenarioActualCurrent: bundle.result.scenarioActualReturnCurrent,
         scenarioActualOptimized: bundle.result.scenarioActualReturnOptimized,
         method: bundle.result.method,
+        taxPreview: bundle.tax_preview ?? undefined,
       })
     } catch (e) {
       setScenarioError(
@@ -235,10 +242,9 @@ export default function ScenariosPage() {
       >
         <h1 className="text-3xl font-bold text-foreground">What-If Scenarios</h1>
         <p className="text-muted-foreground mt-1">
-          Stress-test your portfolio with XGBoost predictions enhanced by FRED macroeconomic data,
-          fed into Mean-Variance Optimization. The model trains on your stocks&apos; historical data
-          plus real economic indicators (Fed rate, inflation, unemployment, VIX) to predict which
-          assets will perform best.
+          Stress-test your portfolio with AI forecasts that learn from your stocks&apos; history
+          and real economic signals like rates, inflation, unemployment, and market fear.
+          Nestor then looks for a portfolio mix with a better risk/reward tradeoff.
         </p>
       </motion.div>
 
@@ -298,9 +304,12 @@ export default function ScenariosPage() {
                     <RefreshCw className="w-8 h-8 text-primary" />
                   </motion.div>
                   <div className="text-center">
-                    <p className="text-muted-foreground font-medium">Running XGBoost + FRED Macro + MVO Pipeline...</p>
+                    <p className="text-muted-foreground font-medium">Running AI scenario analysis...</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Fetching FRED macro data → Training XGBoost on historical + macro features → Optimizing via Efficient Frontier
+                      Fetching macro data, learning from market history, and finding the{" "}
+                      <Term term="Efficient Frontier" context="Scenario optimization pipeline">
+                        best risk/reward tradeoffs
+                      </Term>
                     </p>
                   </div>
                 </div>
@@ -330,7 +339,7 @@ export default function ScenariosPage() {
                     <CardTitle>AI-Powered Recommendation</CardTitle>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Powered by XGBoost predictions + FRED macroeconomic data → Gemini translation
+                    Built from market forecasts, economic data, and a plain-English explanation.
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -342,10 +351,10 @@ export default function ScenariosPage() {
                       
                       const sectionConfig: Record<string, { icon: typeof Shield; color: string }> = {
                         "what happened": { icon: AlertTriangle, color: "text-red-500" },
-                        "why this matters now": { icon: Activity, color: "text-blue-500" },
+                        "why this matters now": { icon: Activity, color: "text-primary" },
                         "what we recommend": { icon: Shield, color: "text-green-500" },
                         "costs & taxes": { icon: DollarSign, color: "text-amber-500" },
-                        "how this fits your goal": { icon: TrendingUp, color: "text-purple-500" },
+                        "how this fits your goal": { icon: TrendingUp, color: "text-foreground" },
                       };
 
                       // If the response has sections, render them nicely
@@ -454,7 +463,11 @@ export default function ScenariosPage() {
               )}
               <Card>
                 <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">Sharpe Ratio</p>
+                  <p className="text-xs text-muted-foreground">
+                    <Term term="Sharpe Ratio" context="Scenario results compare risk-adjusted return before and after rebalancing">
+                      risk-adjusted return
+                    </Term>
+                  </p>
                   <p className="text-lg font-bold text-foreground">
                     {recommendation.originalSharpe?.toFixed(2) ?? "—"} → {recommendation.newSharpe?.toFixed(2) ?? "—"}
                   </p>
@@ -462,7 +475,11 @@ export default function ScenariosPage() {
               </Card>
               <Card>
                 <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">Volatility (ann.)</p>
+                  <p className="text-xs text-muted-foreground">
+                    <Term term="Volatility" context="Scenario results show annualized portfolio risk">
+                      yearly price bumpiness
+                    </Term>{" "}
+                  </p>
                   <p className="text-lg font-bold text-foreground">
                     {recommendation.originalVol?.toFixed(1)}% → {recommendation.newVol?.toFixed(1)}%
                   </p>
@@ -470,7 +487,11 @@ export default function ScenariosPage() {
               </Card>
               <Card>
                 <CardContent className="p-4 text-center">
-                  <p className="text-xs text-muted-foreground">Max Drawdown</p>
+                  <p className="text-xs text-muted-foreground">
+                    <Term term="Drawdown" context="Scenario results show the largest peak-to-trough portfolio drop">
+                      biggest drop from a high
+                    </Term>
+                  </p>
                   <p className="text-lg font-bold text-foreground">
                     {recommendation.maxDDOriginal?.toFixed(1)}% → {recommendation.maxDDOptimized?.toFixed(1)}%
                   </p>
@@ -488,14 +509,20 @@ export default function ScenariosPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-purple-500" />
-                      XGBoost Predictions
+                      <Zap className="w-5 h-5 text-primary" />
+                      <Term term="XGBoost" context="Scenario page forecast model">
+                        AI return forecasts
+                      </Term>
                     </CardTitle>
                     <CardDescription>
-                      The model predicted expected returns and volatility for each asset
+                      The model estimated possible returns and{" "}
+                      <Term term="Volatility" context="XGBoost prediction card for each asset">
+                        expected bumpiness
+                      </Term>{" "}
+                      for each asset
                       {recommendation.pipeline && (
                         <span className="block mt-1 text-xs font-mono text-muted-foreground/70">
-                          {recommendation.pipeline}
+                          Forecast model + portfolio optimizer
                         </span>
                       )}
                     </CardDescription>
@@ -520,18 +547,30 @@ export default function ScenariosPage() {
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <span>Predicted Vol</span>
+                            <span>
+                              <Term term="Volatility" context="Per-asset forecast card">
+                                expected bumpiness
+                              </Term>
+                            </span>
                             <span>{pred.predicted_vol}%</span>
                           </div>
                           {pred.cv_rmse > 0 && (
                             <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                              <span>CV RMSE</span>
+                              <span>
+                                <Term term="RMSE" context="Per-asset forecast model validation">
+                                  model error
+                                </Term>
+                              </span>
                               <span>{pred.cv_rmse}%</span>
                             </div>
                           )}
                           {Object.keys(pred.feature_importances || {}).length > 0 && (
                             <div className="pt-2 border-t space-y-1">
-                              <p className="text-xs text-muted-foreground font-medium">Top Drivers</p>
+                              <p className="text-xs text-muted-foreground font-medium">
+                                <Term term="Feature importance" context="Top model inputs for a prediction">
+                                  What influenced this
+                                </Term>
+                              </p>
                               {Object.entries(pred.feature_importances)
                                 .sort(([, a], [, b]) => b - a)
                                 .slice(0, 3)
@@ -542,7 +581,7 @@ export default function ScenariosPage() {
                                   >
                                     <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                                       <div
-                                        className="h-full bg-purple-500 rounded-full"
+                                        className="h-full bg-primary rounded-full"
                                         style={{ width: `${Math.min(pct, 100)}%` }}
                                       />
                                     </div>
@@ -573,11 +612,13 @@ export default function ScenariosPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-blue-500" />
-                      LSTM 30-Day Forecast
+                      <Activity className="w-5 h-5 text-primary" />
+                      <Term term="LSTM" context="Scenario page 30-day price forecast model">
+                        AI 30-day price forecast
+                      </Term>
                     </CardTitle>
                     <CardDescription>
-                      A 2-layer LSTM neural network trained on 5 years of price history per stock
+                      A time-aware model that studies 5 years of price history for each stock
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -660,7 +701,9 @@ export default function ScenariosPage() {
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-primary" />
-                    Allocation Comparison
+                    <Term term="Allocation" context="Scenario chart compares current and recommended portfolio mix">
+                      Portfolio mix comparison
+                    </Term>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -692,10 +735,12 @@ export default function ScenariosPage() {
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <Activity className="w-4 h-4 text-primary" />
-                        Efficient Frontier
+                        <Term term="Efficient Frontier" context="Scenario chart of optimized risk and return combinations">
+                          Best risk/reward tradeoffs
+                        </Term>
                       </CardTitle>
                       <CardDescription>
-                        Each point is an optimal portfolio for a given return level
+                        Each point shows a portfolio mix designed for a different return goal
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -706,7 +751,7 @@ export default function ScenariosPage() {
                             <XAxis
                               dataKey="volatility"
                               fontSize={11}
-                              label={{ value: "Volatility %", position: "bottom", offset: -5, fontSize: 11 }}
+                              label={{ value: "Bumpiness %", position: "bottom", offset: -5, fontSize: 11 }}
                             />
                             <YAxis
                               dataKey="return"
@@ -715,7 +760,7 @@ export default function ScenariosPage() {
                             />
                             <Tooltip
                               formatter={(v: number, name: string) =>
-                                [`${v}%`, name === "return" ? "Expected Return" : "Volatility"]
+                                [`${v}%`, name === "return" ? "Possible return" : "Price bumpiness"]
                               }
                             />
                             <Line
@@ -744,10 +789,12 @@ export default function ScenariosPage() {
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-orange-500" />
-                        Risk Contribution by Asset
+                        <Term term="Risk contribution" context="Scenario chart shows which holdings drive portfolio risk">
+                          What is driving portfolio risk
+                        </Term>
                       </CardTitle>
                       <CardDescription>
-                        How much each asset contributes to total portfolio risk
+                        How much each holding adds to the portfolio's overall bumpiness
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -758,7 +805,7 @@ export default function ScenariosPage() {
                             <XAxis type="number" fontSize={11} tickFormatter={(v) => `${v}%`} />
                             <YAxis dataKey="ticker" type="category" fontSize={12} width={50} />
                             <Tooltip formatter={(v: number) => `${v}%`} />
-                            <Bar dataKey="contribution" name="Risk %" fill="hsl(24, 95%, 53%)" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="contribution" name="Risk share %" fill="hsl(24, 95%, 53%)" radius={[0, 4, 4, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -779,7 +826,7 @@ export default function ScenariosPage() {
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 text-orange-500" />
-                      Current Allocation
+                      Current portfolio mix
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -818,7 +865,7 @@ export default function ScenariosPage() {
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Shield className="w-4 h-4 text-green-500" />
-                      Optimized Allocation
+                      Recommended portfolio mix
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -874,6 +921,8 @@ export default function ScenariosPage() {
               </motion.div>
             )}
 
+            <TaxPreview preview={recommendation.taxPreview} />
+
             {/* Execute Button */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -886,7 +935,7 @@ export default function ScenariosPage() {
                     <div>
                       <p className="text-sm text-muted-foreground">This proposal has been saved to your account</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Pipeline: XGBoost (predictor) → PyPortfolioOpt MVO (optimizer) → Gemini (translator)
+                        Process: forecast returns, find a better portfolio mix, then explain the result.
                       </p>
                     </div>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>

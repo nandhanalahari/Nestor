@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getUser, onAuthStateChange } from "@/lib/supabase/auth";
+import { isMockDataEnabled, MOCK_USER_ID } from "@/lib/mockData";
 
 type AuthCtx = {
   user: User | null;
@@ -22,6 +23,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isMockDataEnabled()) {
+      setUser({
+        id: MOCK_USER_ID,
+        email: "mock.investor@nestor.local",
+        user_metadata: { display_name: "Mock Investor" },
+      } as unknown as User);
+      setLoading(false);
+      return;
+    }
+
     getUser().then(({ user: u }) => {
       setUser(u);
       setLoading(false);

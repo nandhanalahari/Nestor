@@ -3,7 +3,7 @@
 **Hackathon:** "Empowering the Everyday Investor" (Goldman Sachs / UT Dallas Naveen Jindal School of Management)
 **Branch:** `feature/waz` (off `main` @ `820d231`)
 **Team:** 4
-**Status:** Draft v1 — subject to scope cuts on day 3
+**Status:** Draft v2 — subject to scope cuts on day 3
 
 ---
 
@@ -23,7 +23,7 @@ This PRD adds the layer that turns Nestor from a tool *for* beginners into a too
 
 Both personas are jargon-averse. Both want to know *why*, not just *what*.
 
-## 3. Feature scope (8 features)
+## 3. Feature scope (9 features)
 
 | # | Feature | Owner area | Priority |
 |---|---|---|---|
@@ -35,6 +35,7 @@ Both personas are jargon-averse. Both want to know *why*, not just *what*.
 | F6 | Goal-linked progress projection | Backend + math | P1 |
 | F7 | Natural-language scenario builder | Backend + AI | P1 |
 | F8 | Click-to-learn jargon (Gemini) | Shared component | P1 |
+| F9 | Default starter portfolio recommendations | Frontend + DB | P0 |
 
 Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 
@@ -266,6 +267,51 @@ Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 
 ---
 
+### F9. Default starter portfolio recommendations
+
+**User story.** As a brand-new signup with no holdings, after I take the risk quiz I land on the dashboard and see a personalized starter portfolio matched to my profile, with a one-tap button to add it all to my account.
+
+**Flow.** Sign up → F1 quiz → `/dashboard` → if `holdings.length === 0` AND user has a profile, render the **Starter Portfolio Card** (replaces the current empty-state card).
+
+**Card content.**
+- "Recommended for **The {profile_label}**" header tied to F1 result.
+- Allocation pie chart for the profile's template.
+- Per-ticker rows: ticker, name, target %, one-line plain-English role ("U.S. broad market — your equity engine").
+- One-line rationale tied to profile (e.g., Steady: "Lower volatility — you said you might need this in 1–3 years").
+- Primary CTA: **"Build my starter portfolio"** (single click, default $10k seed).
+- Secondary: small "I'd rather pick myself" link → existing Add Holding form.
+
+**Allocation templates (static, in `lib/starterPortfolio.ts`).** All tickers chosen from the existing Kaggle dataset and compatible with `STARTER_STOCKS` in `app/dashboard/page.tsx`:
+- **Steady Builder** (target vol ≤12%): BND 60%, SPY 20%, VEA 10%, BIL 10%
+- **Balanced Climber** (12–18%): SPY 40%, QQQ 15%, BND 25%, VEA 15%, IAU 5%
+- **Bold Grower** (18–28%): QQQ 35%, SPY 25%, NVDA 10%, AAPL 10%, VEA 10%, IAU 5%, BND 5%
+
+Target-vol bands match the F3 risk-match formula.
+
+**Build mechanic.** On "Build my starter portfolio":
+- Default seed amount: **$10,000**.
+- For each ticker: `shares = floor((seed_amount * weight) / current_price)`; `cost_basis = current_price`; `cost_basis_date = today` (the F5-required column).
+- One transaction via `POST /api/holdings/seed`.
+
+**Acceptance criteria.**
+- Card renders only when `holdings.length === 0` AND profile exists. If no profile, card becomes "Take the quiz to get a personalized portfolio" → `/onboarding`.
+- "Build my starter portfolio" populates dashboard in <2s.
+- Pie weights, rationale, and ticker list are deterministic per `profile_label`.
+- After seeding, F3 health score reflects the new portfolio (target vol in band, diversification ≥80).
+- Re-taking the quiz with a different result does NOT replace existing holdings — F9 only triggers when holdings are empty.
+
+**Data.**
+- New module `lib/starterPortfolio.ts` (pure, unit-testable). API: `getStarterPortfolio(profileLabel: ProfileLabel) → { tickers: [{ticker, name, category, weight, role}], rationale }`. Reuses `ProfileLabel` from `lib/profile.ts`.
+- New endpoint `POST /api/holdings/seed` — body: `{ seed_amount?: number }`. Reads user profile, fetches current prices, computes shares, bulk-inserts into `holdings`.
+- Extend `STARTER_STOCKS` list in `app/dashboard/page.tsx` to include all template tickers (BND, SPY, QQQ, VEA, BIL, IAU, NVDA, AAPL).
+- New component `components/StarterPortfolioCard.tsx`.
+
+**MVP cut.** 3 templates × 4–7 tickers each, fixed $10k seed (no slider), no "customize first" path — one CTA + a "pick myself" link.
+
+**Why this matters.** Without F9, F2/F3/F4/F6 are inert for first-time users (empty news rail, $0 health score, empty re-priced lessons, no `P` for goal projection). F9 is the seed-state bridge that makes the rest of the product immediately functional after the quiz.
+
+---
+
 ## 5. Architecture diff vs. `main`
 
 ### New routes (Next.js)
@@ -280,6 +326,7 @@ Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 - `POST /api/scenario/custom` (F7)
 - `POST /api/glossary` (F8)
 - `GET /api/goals/projection` (F6)
+- `POST /api/holdings/seed` (F9)
 
 ### Modified API routes
 - `GET /api/portfolio` — adds `healthScore` + `factors[]` (F3)
@@ -291,7 +338,8 @@ Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 - `lib/tax.ts` — F5 math
 - `lib/projection.ts` — F6 math
 - `lib/glossary-seed.ts` — F8 pre-seeded terms
-- `components/Term.tsx`, `components/RiskMeter.tsx`, `components/NewsRail.tsx`, `components/TaxPreview.tsx`, `components/GoalProjection.tsx`, `components/ScenarioBuilder.tsx`, `components/HistoricalLesson.tsx`
+- `lib/starterPortfolio.ts` — F9 profile → allocation templates
+- `components/Term.tsx`, `components/RiskMeter.tsx`, `components/NewsRail.tsx`, `components/TaxPreview.tsx`, `components/GoalProjection.tsx`, `components/ScenarioBuilder.tsx`, `components/HistoricalLesson.tsx`, `components/StarterPortfolioCard.tsx`
 
 ### New Supabase tables
 - `user_profiles`
@@ -321,7 +369,7 @@ Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 | Dev A (frontend lead) | F1 quiz UI, F8 `<Term>` component, copywriting | Style polish across F3 / F4 |
 | Dev B (frontend) | F3 health meter, F4 lesson UI (the demo centerpiece) | F6 goal projection card |
 | Dev C (backend + AI) | F2 news pipeline, F7 NL scenario builder, all Gemini caching | F8 glossary endpoint |
-| Dev D (backend + math) | F5 tax preview, F6 projection math, F4 outcome simulation, Supabase migrations | DB seeds for F4 |
+| Dev D (backend + math) | F5 tax preview, F6 projection math, F4 outcome simulation, F9 starter-portfolio templates + seed endpoint, Supabase migrations | DB seeds for F4, frontend handoff for F9 card |
 
 ---
 
@@ -344,7 +392,7 @@ Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 | News API quota exhausted | F2 stale | 4h cron + Supabase cache + manual refresh button hidden behind a key combo for the demo |
 | Demo data drift (live prices move overnight) | F4 outcomes shift, F3 score fluctuates | "Demo mode" feature flag freezes prices to a snapshot stored in Supabase for the demo user only |
 | F4 outcome math wrong under unusual portfolios | Ugly numbers in the centerpiece | Demo user has a fixed seeded portfolio (5 stocks, all in Kaggle dataset) we test outcomes for end-to-end |
-| Time creep | Some features ship as stubs | Cut order: drop F7 → drop F5 → reduce F4 to 2 lessons. Never cut F1, F3, F4, or F8 — those carry the demo. |
+| Time creep | Some features ship as stubs | Cut order: drop F7 → drop F5 → reduce F4 to 2 lessons. Never cut F1, F3, F4, F8, or F9 — F1/F3/F4/F8 carry the demo and F9 is what makes F2/F3/F4/F6 functional for first-time users. |
 | Gemini cost overrun | $$ during dev | Cap dev spend with daily budget alarm; cache aggressively in dev too |
 
 ---
@@ -359,5 +407,6 @@ Cut order if behind on day 4: F7 → F5 → reduce F4 from 3 lessons to 2.
 - **F6:** Set a goal with deadline 5 years out and a contribution rate that under-funds it → red warning + CTA. Bump contribution → green.
 - **F7:** Submit each of the 4 example chips → all return valid rebalances. Submit nonsense → friendly rejection.
 - **F8:** Click 5 different bolded terms → all return a 1–2 sentence explanation; second click on the same term returns instantly from cache.
+- **F9:** Sign up a fresh user → take quiz → land on dashboard with zero holdings → confirm Starter Portfolio Card matches `profile_label` template → click "Build my starter portfolio" → confirm holdings inserted with shares = floor(seed * weight / price), `cost_basis_date = today`, dashboard repopulates in <2s, F3 health score in expected band for the profile.
 
 End-to-end demo dry-run on day 4 against the seeded demo user.

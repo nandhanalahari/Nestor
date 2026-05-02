@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Term } from "@/components/Term"
 import {
   Globe,
   TrendingUp,
@@ -572,6 +573,20 @@ export default function MacroPage() {
                       (10Y−2Y) is one of the most reliable recession
                       predictors — when it inverts, XGBoost adjusts its risk
                       estimates accordingly.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Learn:{" "}
+                      <Term context="Macro dashboard explanation">
+                        volatility
+                      </Term>
+                      {" / "}
+                      <Term context="Macro dashboard explanation">
+                        yield
+                      </Term>
+                      {" / "}
+                      <Term context="Macro dashboard explanation">
+                        recession
+                      </Term>
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
                       Data source:{" "}

@@ -77,7 +77,7 @@ export function RiskMeter({
 
   // Color based on score
   const getColor = (s: number) => {
-    if (s <= 33) return { main: "#3b82f6", glow: "rgba(59, 130, 246, 0.3)" }; // Blue for steady
+    if (s <= 33) return { main: "#7399c6", glow: "rgba(115, 153, 198, 0.3)" }; // Goldman Sachs blue for steady
     if (s <= 66) return { main: "#f59e0b", glow: "rgba(245, 158, 11, 0.3)" }; // Amber for balanced
     return { main: "#10b981", glow: "rgba(16, 185, 129, 0.3)" }; // Green for bold
   };

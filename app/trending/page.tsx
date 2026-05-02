@@ -209,7 +209,7 @@ export default function TrendingPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Activity className="w-5 h-5 text-blue-500" />
+                  <Activity className="w-5 h-5 text-primary" />
                   Most Active
                 </CardTitle>
                 <CardDescription>Highest trading volume today</CardDescription>

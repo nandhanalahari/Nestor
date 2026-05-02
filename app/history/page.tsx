@@ -315,8 +315,8 @@ export default function HistoryPage() {
                             onClick={() => toggleBranch(contribKey)}
                             className="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-accent/30 transition-colors"
                           >
-                            <div className="w-1 h-8 bg-blue-500 rounded-full" />
-                            <BarChart3 className="w-4 h-4 text-blue-500" />
+                            <div className="w-1 h-8 bg-primary rounded-full" />
+                            <BarChart3 className="w-4 h-4 text-primary" />
                             <span className="font-medium text-sm text-foreground">Portfolio Contribution</span>
                             <span className="text-xs text-muted-foreground ml-auto mr-2">
                               impact on total
@@ -356,8 +356,8 @@ export default function HistoryPage() {
                             onClick={() => toggleBranch(weightKey)}
                             className="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-accent/30 transition-colors"
                           >
-                            <div className="w-1 h-8 bg-purple-500 rounded-full" />
-                            <Percent className="w-4 h-4 text-purple-500" />
+                            <div className="w-1 h-8 bg-foreground rounded-full" />
+                            <Percent className="w-4 h-4 text-foreground" />
                             <span className="font-medium text-sm text-foreground">Weight Over Time</span>
                             <span className="text-xs text-muted-foreground ml-auto mr-2">
                               allocation drift
@@ -383,7 +383,7 @@ export default function HistoryPage() {
                                     <div className="flex-1 flex items-center gap-2">
                                       <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden max-w-32">
                                         <div
-                                          className="h-full bg-purple-500 rounded-full"
+                                          className="h-full bg-primary rounded-full"
                                           style={{ width: `${Math.min(w.portfolio_weight, 100)}%` }}
                                         />
                                       </div>

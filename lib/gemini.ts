@@ -239,3 +239,29 @@ For each article, analyze it in the context of a beginner investor who holds the
   }
 }
 
+export async function explainGlossaryTerm(
+  term: string,
+  context?: string,
+): Promise<string> {
+  const ai = getClient();
+  const prompt = `Explain this investing term for a beginner in 1-2 short sentences.
+
+Term: ${term}
+${context ? `Context where it appeared: ${context}` : ""}
+
+Rules:
+- Use plain English.
+- Do not give personalized financial advice.
+- Do not mention that you are an AI.
+- Return only the explanation text.`;
+
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: prompt,
+  });
+
+  const text = response.text?.trim() ?? "";
+  if (!text) throw new Error("Gemini returned an empty glossary explanation.");
+  return text.replace(/^["']|["']$/g, "");
+}
+

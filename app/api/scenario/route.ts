@@ -2,12 +2,24 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runScenario } from "@/lib/scenario";
 import { explainRebalancing } from "@/lib/gemini";
+import { calculateTaxPreview } from "@/lib/tax";
+import { getLiveQuotes } from "@/lib/yahooFinance";
+import { isMockDataEnabled, mockGoals, mockHoldings, mockQuotes, MOCK_USER_ID } from "@/lib/mockData";
 import type { Holding, ScenarioId } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ML_API = process.env.ML_API_URL || "http://127.0.0.1:8000";
+
+type DbHolding = {
+  ticker: string;
+  name: string;
+  category: string;
+  shares?: number | null;
+  cost_basis?: number | null;
+  cost_basis_date?: string | null;
+};
 
 async function mlFetch(path: string, options: RequestInit, retries = 2): Promise<Response | null> {
   for (let i = 0; i <= retries; i++) {
@@ -35,6 +47,88 @@ function getSupabase(accessToken: string) {
   });
 }
 
+function allocationPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.abs(value) <= 1 ? value * 100 : value;
+}
+
+async function buildTaxPreview(
+  dbHoldings: DbHolding[] | undefined,
+  originalAllocation: Record<string, number>,
+  newAllocation: Record<string, number>,
+) {
+  if (!dbHoldings || dbHoldings.length === 0) return undefined;
+
+  const tickersWithShares = dbHoldings
+    .filter((holding) => Number(holding.shares) > 0 && holding.category !== "Cash")
+    .map((holding) => holding.ticker.toUpperCase());
+  const quotes = isMockDataEnabled()
+    ? mockQuotes.filter((quote) => tickersWithShares.includes(quote.ticker))
+    : await getLiveQuotes(tickersWithShares);
+  const quoteByTicker = new Map(
+    quotes.map((quote) => [quote.ticker.toUpperCase(), quote.price]),
+  );
+
+  const marketValues = new Map<string, number>();
+  let totalValue = 0;
+
+  for (const holding of dbHoldings) {
+    const ticker = holding.ticker.toUpperCase();
+    const shares = Number(holding.shares) || 0;
+    const totalCostBasis = Number(holding.cost_basis) || 0;
+    const livePrice = quoteByTicker.get(ticker);
+    const marketValue =
+      livePrice !== undefined && shares > 0
+        ? livePrice * shares
+        : Math.max(0, totalCostBasis);
+
+    marketValues.set(ticker, marketValue);
+    totalValue += marketValue;
+  }
+
+  if (totalValue <= 0) return undefined;
+
+  const holdingByTicker = new Map(
+    dbHoldings.map((h) => [h.ticker.toUpperCase(), h]),
+  );
+  const tickers = new Set([
+    ...Object.keys(originalAllocation),
+    ...Object.keys(newAllocation),
+  ]);
+
+  const lots = [];
+  for (const ticker of tickers) {
+    const trimPct =
+      allocationPercent(Number(originalAllocation[ticker]) || 0) -
+      allocationPercent(Number(newAllocation[ticker]) || 0);
+    if (trimPct <= 0) continue;
+
+    const holding = holdingByTicker.get(ticker.toUpperCase());
+    if (!holding) continue;
+
+    const sharesOwned = Number(holding.shares) || 0;
+    const totalCostBasis = Number(holding.cost_basis) || 0;
+    const marketValue = marketValues.get(ticker.toUpperCase()) ?? 0;
+    if (sharesOwned <= 0 || totalCostBasis <= 0 || marketValue <= 0) continue;
+
+    const sellProceeds = totalValue * (trimPct / 100);
+    const sellPrice = marketValue / sharesOwned;
+    const sharesSold = Math.min(sharesOwned, sellProceeds / sellPrice);
+    const perShareCostBasis = totalCostBasis / sharesOwned;
+
+    lots.push({
+      ticker,
+      sharesSold,
+      sellPrice,
+      costBasis: perShareCostBasis,
+      costBasisDate: holding.cost_basis_date,
+    });
+  }
+
+  const preview = calculateTaxPreview(lots);
+  return preview.lines.length > 0 ? preview : undefined;
+}
+
 export async function POST(req: Request) {
   let body: { scenarioId?: ScenarioId } = {};
   try {
@@ -51,13 +145,40 @@ export async function POST(req: Request) {
   }
 
   let holdings: Holding[] | undefined;
+  let dbHoldingsForTax: DbHolding[] | undefined;
   let userId: string | undefined;
   let userGoalText: string | undefined;
 
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
 
-  if (token) {
+  if (isMockDataEnabled()) {
+    userId = MOCK_USER_ID;
+    dbHoldingsForTax = mockHoldings.map((holding) => ({
+      ticker: holding.ticker,
+      name: holding.name,
+      category: holding.category,
+      shares: holding.shares,
+      cost_basis: holding.costBasis ?? holding.amount,
+      cost_basis_date: holding.costBasisDate ?? null,
+    }));
+    const totalCost = mockHoldings.reduce(
+      (sum, holding) => sum + (holding.costBasis ?? holding.amount),
+      0,
+    );
+    holdings = mockHoldings.map((holding) => ({
+      ticker: holding.ticker,
+      name: holding.name,
+      category: holding.category,
+      amount: holding.costBasis ?? holding.amount,
+      weight:
+        totalCost > 0 ? (holding.costBasis ?? holding.amount) / totalCost : 0,
+      shares: holding.shares,
+      costBasis: holding.costBasis ?? holding.amount,
+      costBasisDate: holding.costBasisDate ?? undefined,
+    }));
+    userGoalText = mockGoals[0]?.text_goal;
+  } else if (token) {
     try {
       const supabase = getSupabase(token);
       const {
@@ -72,6 +193,7 @@ export async function POST(req: Request) {
           .eq("user_id", user.id);
 
         if (dbHoldings && dbHoldings.length > 0) {
+          dbHoldingsForTax = dbHoldings as DbHolding[];
           const totalCost = dbHoldings.reduce(
             (s: number, h: { cost_basis: number }) => s + Number(h.cost_basis),
             0,
@@ -82,12 +204,17 @@ export async function POST(req: Request) {
               name: string;
               category: string;
               cost_basis: number;
+              cost_basis_date?: string | null;
+              shares?: number | null;
             }) => ({
               ticker: h.ticker,
               name: h.name,
               category: h.category as Holding["category"],
               amount: Number(h.cost_basis),
               weight: totalCost > 0 ? Number(h.cost_basis) / totalCost : 0,
+              shares: Number(h.shares) || undefined,
+              costBasis: Number(h.cost_basis),
+              costBasisDate: h.cost_basis_date ?? undefined,
             }),
           );
         }
@@ -96,12 +223,12 @@ export async function POST(req: Request) {
         try {
           const { data: goals } = await supabase
             .from("goals")
-            .select("text")
+            .select("text_goal, title")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(1);
           if (goals && goals.length > 0) {
-            userGoalText = goals[0].text;
+            userGoalText = goals[0].text_goal || goals[0].title;
           }
         } catch {
           // Goal fetch is non-critical
@@ -113,7 +240,7 @@ export async function POST(req: Request) {
   }
 
   // ── Try XGBoost + PyPortfolioOpt Python pipeline first ──
-  if (holdings && holdings.length > 0) {
+  if (holdings && holdings.length > 0 && !isMockDataEnabled()) {
     try {
       const mlRes = await mlFetch("/analyze", {
         method: "POST",
@@ -170,6 +297,11 @@ export async function POST(req: Request) {
           scenarioActualReturnOptimized: opt.scenario_actual_return_optimized,
           method: opt.method,
         };
+        const taxPreview = await buildTaxPreview(
+          dbHoldingsForTax,
+          result.originalAllocation,
+          result.newAllocation,
+        );
 
         let explanation = "";
         try {
@@ -222,6 +354,7 @@ export async function POST(req: Request) {
           explanation,
           source: "xgboost-mvo",
           warnings: [],
+          tax_preview: taxPreview ?? null,
         });
       }
     } catch {
@@ -232,6 +365,11 @@ export async function POST(req: Request) {
   // ── Fallback: TypeScript MVO engine ──
   try {
     const bundle = await runScenario(body.scenarioId, holdings);
+    const taxPreview = await buildTaxPreview(
+      dbHoldingsForTax,
+      bundle.result.originalAllocation,
+      bundle.result.newAllocation,
+    );
 
     // Try to fetch FRED macro data for fallback path too
     let macroSnapshot: Record<string, { name: string; value: number; change_1m?: number | null }> | undefined;
@@ -286,7 +424,11 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ...bundle, explanation });
+    return NextResponse.json({
+      ...bundle,
+      explanation,
+      tax_preview: taxPreview ?? null,
+    });
   } catch (error) {
     return NextResponse.json(
       {

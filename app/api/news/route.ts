@@ -6,6 +6,59 @@ import type { NewsItem } from "@/lib/types";
 // Simple in-memory cache keyed by sorted tickers hash
 const cache = new Map<string, { data: NewsItem[]; expiresAt: number }>();
 
+function isMajorNews(item: NewsItem, userTickers: string[]): boolean {
+  const text = `${item.headline} ${item.summary}`.toLowerCase();
+  const relatedTickers = item.relatedTickers.map((ticker) => ticker.toUpperCase());
+  const isHeldCompany =
+    item.newsType === "company" &&
+    relatedTickers.some((ticker) => userTickers.includes(ticker));
+
+  const macroSignals = [
+    "fed ",
+    "federal reserve",
+    "rate cut",
+    "rate hike",
+    "interest rate",
+    "inflation",
+    "cpi",
+    "jobs report",
+    "unemployment",
+    "gdp",
+    "recession",
+    "tariff",
+    "sanction",
+    "oil prices",
+    "market crash",
+    "selloff",
+    "s&p 500",
+    "nasdaq",
+    "dow jones",
+  ];
+
+  const companySignals = [
+    "earnings",
+    "guidance",
+    "revenue",
+    "profit",
+    "beats estimates",
+    "misses estimates",
+    "merger",
+    "acquisition",
+    "takeover",
+    "antitrust",
+    "lawsuit",
+    "investigation",
+    "sec ",
+    "recall",
+    "bankruptcy",
+    "stock split",
+    "dividend",
+  ];
+
+  return macroSignals.some((signal) => text.includes(signal)) ||
+    (isHeldCompany && companySignals.some((signal) => text.includes(signal)));
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const tickersParam = searchParams.get("tickers") || "";
@@ -42,9 +95,19 @@ export async function GET(request: Request) {
       new Map(allNews.map((item) => [item.headline, item])).values()
     );
 
-    // 3. Sort by date (newest first) and limit to 5-7 items
-    uniqueNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    let finalNews = uniqueNews.slice(0, 6);
+    const classifiedNews = uniqueNews.map((item) => ({
+      ...item,
+      importance: isMajorNews(item, tickers) ? "high" as const : item.importance,
+    }));
+
+    // 3. Sort by importance, then date, and limit to 5-7 items
+    classifiedNews.sort((a, b) => {
+      const importanceDelta =
+        Number(b.importance === "high") - Number(a.importance === "high");
+      if (importanceDelta !== 0) return importanceDelta;
+      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+    });
+    let finalNews = classifiedNews.slice(0, 6);
 
     // 4. Send batch to Gemini for cause-effect analysis
     if (finalNews.length > 0) {
@@ -59,7 +122,9 @@ export async function GET(request: Request) {
           geminiWhy: geminiAnalysis[index].why,
           geminiForYou: geminiAnalysis[index].forYou,
           geminiDeepDive: geminiAnalysis[index].deepDive,
-          importance: geminiAnalysis[index].importance,
+          importance: geminiAnalysis[index].importance === "high" || item.importance === "high"
+            ? "high"
+            : "normal",
           impact: geminiAnalysis[index].impact,
           jargon: geminiAnalysis[index].jargon,
           takeaway: geminiAnalysis[index].takeaway,

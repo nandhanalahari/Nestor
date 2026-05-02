@@ -43,6 +43,8 @@ import { useAuth } from "@/components/auth-provider"
 import { RiskMeter } from "@/components/RiskMeter"
 import { authFetch } from "@/lib/api"
 import { NewsRail } from "@/components/NewsRail"
+import { Term } from "@/components/Term"
+import { StarterPortfolioCard } from "@/components/StarterPortfolioCard"
 
 type PortfolioPayload = {
   holdings: Holding[]
@@ -75,7 +77,10 @@ const STARTER_STOCKS = [
   { ticker: "TSLA", name: "Tesla Inc.", category: "Stock" },
   { ticker: "SPY", name: "SPDR S&P 500 ETF", category: "ETF" },
   { ticker: "QQQ", name: "Invesco QQQ Trust", category: "ETF" },
+  { ticker: "VEA", name: "Vanguard FTSE Developed Markets ETF", category: "ETF" },
+  { ticker: "IAU", name: "iShares Gold Trust", category: "ETF" },
   { ticker: "BND", name: "Vanguard Total Bond Market ETF", category: "Bond ETF" },
+  { ticker: "BIL", name: "SPDR Bloomberg 1-3 Month T-Bill ETF", category: "Bond ETF" },
 ]
 
 const containerVariants = {
@@ -421,20 +426,10 @@ export default function DashboardPage() {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : isEmpty ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-        >
-          <Card>
-            <CardContent className="p-12 text-center">
-              <PieChart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground">No holdings yet</h3>
-              <p className="text-muted-foreground mt-1">
-                Click &quot;Add Holding&quot; to add your first stock or ETF.
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
+        <StarterPortfolioCard
+          onSeeded={loadPortfolio}
+          onPickMyself={() => setShowAddForm(true)}
+        />
       ) : (
         <>
           <motion.div
@@ -599,7 +594,12 @@ export default function DashboardPage() {
           >
             <Card className="hover:shadow-lg transition-shadow duration-300">
               <CardHeader>
-                <CardTitle>Your Holdings</CardTitle>
+                <CardTitle>
+                  Your Holdings{" "}
+                  <span className="text-sm font-normal text-muted-foreground">
+                    by <Term context="Dashboard holdings show each position as a percent of the portfolio">allocation</Term>
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -669,7 +669,7 @@ export default function DashboardPage() {
               <CardHeader className="flex flex-row items-start justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-blue-500" />
+                    <Sparkles className="w-5 h-5 text-primary" />
                     LSTM 30-Day Price Forecast
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">

@@ -40,24 +40,24 @@ const PROFILE_STRATEGY: Record<
   "Steady Builder": {
     items: [
       { icon: PiggyBank, label: "Investment Mix", value: "Heavy bonds & stable ETFs, light on individual stocks", color: "#10b981" },
-      { icon: TrendingUp, label: "Expected Return", value: "~5% per year", color: "#3b82f6" },
-      { icon: Zap, label: "Rebalance Frequency", value: "Quarterly check-ins", color: "#8b5cf6" },
+      { icon: TrendingUp, label: "Expected Return", value: "~5% per year", color: "var(--primary)" },
+      { icon: Zap, label: "Rebalance Frequency", value: "Quarterly check-ins", color: "var(--foreground)" },
       { icon: AlertTriangle, label: "Drawdown Alerts", value: "We'll flag drops over 8%", color: "#f59e0b" },
     ],
   },
   "Balanced Climber": {
     items: [
       { icon: PiggyBank, label: "Investment Mix", value: "Mix of growth stocks, ETFs, and some bonds", color: "#10b981" },
-      { icon: TrendingUp, label: "Expected Return", value: "~7% per year", color: "#3b82f6" },
-      { icon: Zap, label: "Rebalance Frequency", value: "Quarterly check-ins", color: "#8b5cf6" },
+      { icon: TrendingUp, label: "Expected Return", value: "~7% per year", color: "var(--primary)" },
+      { icon: Zap, label: "Rebalance Frequency", value: "Quarterly check-ins", color: "var(--foreground)" },
       { icon: AlertTriangle, label: "Drawdown Alerts", value: "We'll flag drops over 15%", color: "#f59e0b" },
     ],
   },
   "Bold Grower": {
     items: [
       { icon: PiggyBank, label: "Investment Mix", value: "Growth-heavy stocks and aggressive ETFs", color: "#10b981" },
-      { icon: TrendingUp, label: "Expected Return", value: "~9% per year", color: "#3b82f6" },
-      { icon: Zap, label: "Rebalance Frequency", value: "Semi-annual check-ins", color: "#8b5cf6" },
+      { icon: TrendingUp, label: "Expected Return", value: "~9% per year", color: "var(--primary)" },
+      { icon: Zap, label: "Rebalance Frequency", value: "Semi-annual check-ins", color: "var(--foreground)" },
       { icon: AlertTriangle, label: "Drawdown Alerts", value: "We'll only flag drops over 25%", color: "#f59e0b" },
     ],
   },

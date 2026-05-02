@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Term } from "@/components/Term"
 import { cn } from "@/lib/utils"
 import type { NewsItem } from "@/lib/types"
 
@@ -46,6 +47,17 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
     fetchNews()
   }, [tickers.join(",")])
 
+  useEffect(() => {
+    if (news.length === 0) return
+    const hasCurrentFilter = news.some((item) => item.newsType === newsFilter)
+    if (!hasCurrentFilter) {
+      const fallbackFilter = news.some((item) => item.newsType === "company")
+        ? "company"
+        : "macro"
+      setNewsFilter(fallbackFilter)
+    }
+  }, [news, newsFilter])
+
   if (loading) {
     return (
       <div className="w-full py-6 flex flex-col items-center justify-center space-y-4 border rounded-xl bg-card/50">
@@ -74,7 +86,14 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
     return null
   }
 
-  const filteredNews = news.filter(n => n.newsType === newsFilter);
+  const filteredNews = news
+    .filter((n) => n.newsType === newsFilter)
+    .sort((a, b) => {
+      const importanceDelta =
+        Number(b.importance === "high") - Number(a.importance === "high")
+      if (importanceDelta !== 0) return importanceDelta
+      return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+    })
 
   return (
     <div className="relative group w-full space-y-2">
@@ -235,7 +254,11 @@ export function NewsRail({ tickers }: { tickers: string[] }) {
                               <ul className="space-y-1">
                                 {item.jargon.map((j, i) => (
                                   <li key={i} className="text-[11px] text-foreground/80">
-                                    <span className="font-semibold text-primary">{j.term}:</span> {j.definition}
+                                    <Term term={j.term} context={j.definition}>
+                                      {j.term}
+                                    </Term>
+                                    {": "}
+                                    {j.definition}
                                   </li>
                                 ))}
                               </ul>

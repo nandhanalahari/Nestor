@@ -108,16 +108,16 @@ function levelTierClasses(level: number): {
   }
   if (lv >= 5) {
     return {
-      avatarRing: "ring-2 ring-purple-500/90 ring-offset-2 ring-offset-background",
+      avatarRing: "ring-2 ring-foreground/80 ring-offset-2 ring-offset-background",
       badgeClass:
-        "border-purple-500/45 bg-purple-500/12 text-purple-900 dark:text-purple-100",
+        "border-foreground/30 bg-foreground/10 text-foreground",
     };
   }
   if (lv >= 3) {
     return {
-      avatarRing: "ring-2 ring-blue-500/90 ring-offset-2 ring-offset-background",
+      avatarRing: "ring-2 ring-primary/90 ring-offset-2 ring-offset-background",
       badgeClass:
-        "border-blue-500/45 bg-blue-500/12 text-blue-900 dark:text-blue-100",
+        "border-primary/45 bg-primary/12 text-foreground",
     };
   }
   return {

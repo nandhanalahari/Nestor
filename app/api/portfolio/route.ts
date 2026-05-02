@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { computeHealthScore } from "@/lib/healthScore";
 import { getLiveQuotes } from "@/lib/yahooFinance";
+import { isMockDataEnabled, mockHoldings, mockProfile, mockQuotes } from "@/lib/mockData";
 import type { Holding, Quote } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,6 +20,47 @@ function getSupabase(accessToken: string) {
 }
 
 export async function GET(req: Request) {
+  if (isMockDataEnabled()) {
+    const holdings = mockHoldings.map((holding) => ({
+      ...holding,
+      costBasis: holding.costBasis ?? holding.amount,
+    }));
+    const totalValue = holdings.reduce((sum, holding) => {
+      const quote = mockQuotes.find((q) => q.ticker === holding.ticker);
+      return sum + (quote && holding.shares ? quote.price * holding.shares : holding.amount);
+    }, 0);
+    const marketValueWeights = holdings.map((holding) => {
+      const quote = mockQuotes.find((q) => q.ticker === holding.ticker);
+      const value = quote && holding.shares ? quote.price * holding.shares : holding.amount;
+      return totalValue > 0 ? value / totalValue : 0;
+    });
+    const dailyChangePct = mockQuotes.reduce((acc, quote) => {
+      const holding = holdings.find((h) => h.ticker === quote.ticker);
+      const quoteValue = holding?.shares ? quote.price * holding.shares : 0;
+      const weight = totalValue > 0 ? quoteValue / totalValue : 0;
+      return acc + quote.changePercent * weight;
+    }, 0);
+    const { healthScore, factors } = computeHealthScore({
+      marketValueWeights,
+      dailyChangePct,
+      warnings: ["Mock data mode is enabled. Values are local test data."],
+      profile: mockProfile,
+    });
+
+    return NextResponse.json({
+      holdings,
+      quotes: mockQuotes,
+      totalValue,
+      dailyChangePct: Math.round(dailyChangePct * 100) / 100,
+      asOf: "2026-05-02",
+      warnings: ["Mock data mode is enabled. Values are local test data."],
+      healthScore,
+      factors,
+      scoreDelta: null,
+      weeklyHigh: healthScore,
+    });
+  }
+
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
 

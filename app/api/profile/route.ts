@@ -142,7 +142,16 @@ export async function POST(req: Request) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[/api/profile POST] Supabase upsert error:", error);
+    return NextResponse.json(
+      {
+        error: error.message || "Supabase error (no message)",
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ profile: data });

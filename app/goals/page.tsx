@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
+import type { Variants } from "framer-motion"
 import {
   Card,
   CardContent,
@@ -29,12 +30,14 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { authFetch } from "@/lib/api"
+import { GoalProjection } from "@/components/GoalProjection"
 
 interface Goal {
   id: string
   title: string
   target_amount: number
   current_amount: number
+  monthly_savings_target?: number | null
   deadline: string
   icon: string
   ai_suggestion?: string
@@ -48,12 +51,12 @@ const iconMap: Record<string, typeof Home> = {
   other: Target,
 }
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.12 } },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 30, opacity: 0 },
   visible: {
     y: 0,
@@ -69,7 +72,13 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
-  const [newGoal, setNewGoal] = useState({ title: "", amount: "", deadline: "", icon: "other" })
+  const [newGoal, setNewGoal] = useState({
+    title: "",
+    amount: "",
+    monthlySavings: "",
+    deadline: "",
+    icon: "other",
+  })
   const [isSaving, setIsSaving] = useState(false)
   const [saveNotice, setSaveNotice] = useState<string | null>(null)
 
@@ -109,6 +118,9 @@ export default function GoalsPage() {
         body: JSON.stringify({
           title: newGoal.title,
           target_amount: parseFloat(newGoal.amount),
+          monthly_savings_target: newGoal.monthlySavings
+            ? parseFloat(newGoal.monthlySavings)
+            : null,
           deadline: newGoal.deadline,
           icon: newGoal.icon,
           text: `I want to ${newGoal.title} with a target of $${newGoal.amount} by ${newGoal.deadline || "someday"}.`,
@@ -116,7 +128,13 @@ export default function GoalsPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setNewGoal({ title: "", amount: "", deadline: "", icon: "other" })
+        setNewGoal({
+          title: "",
+          amount: "",
+          monthlySavings: "",
+          deadline: "",
+          icon: "other",
+        })
         setIsAdding(false)
         await loadGoals()
       } else {
@@ -138,6 +156,16 @@ export default function GoalsPage() {
     } catch {
       // ignore
     }
+  }
+
+  const handleProjectionSaved = (goalId: string, monthlySavingsTarget: number) => {
+    setGoals((currentGoals) =>
+      currentGoals.map((goal) =>
+        goal.id === goalId
+          ? { ...goal, monthly_savings_target: monthlySavingsTarget }
+          : goal,
+      ),
+    )
   }
 
   if (authLoading || (!user && !authLoading)) {
@@ -186,7 +214,7 @@ export default function GoalsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <Input
                     placeholder="e.g., New car, Emergency fund"
                     value={newGoal.title}
@@ -197,6 +225,12 @@ export default function GoalsPage() {
                     placeholder="Target amount ($)"
                     value={newGoal.amount}
                     onChange={(e) => setNewGoal({ ...newGoal, amount: e.target.value })}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Monthly savings ($)"
+                    value={newGoal.monthlySavings}
+                    onChange={(e) => setNewGoal({ ...newGoal, monthlySavings: e.target.value })}
                   />
                   <Input
                     type="text"
@@ -334,6 +368,12 @@ export default function GoalsPage() {
                                 }}
                               />
                             </div>
+
+                            <GoalProjection
+                              goalId={goal.id}
+                              monthlySavingsTarget={goal.monthly_savings_target}
+                              onSaved={handleProjectionSaved}
+                            />
 
                             {goal.ai_suggestion && (
                               <motion.div

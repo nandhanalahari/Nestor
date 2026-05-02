@@ -9,6 +9,7 @@ export type Holding = {
   weight: number;
   shares?: number;
   costBasis?: number;
+  costBasisDate?: string;
 };
 
 export type Quote = {
@@ -104,6 +105,7 @@ export type Goal = {
   horizonYears?: number;
   targetAmount?: number;
   currentAmount?: number;
+  monthlySavingsTarget?: number | null;
   deadline?: string;
   icon?: string;
   encouragement?: string;
