@@ -109,3 +109,21 @@ export type Goal = {
   encouragement?: string;
   aiSuggestion?: string;
 };
+
+export type NewsItem = {
+  id: string;
+  headline: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  summary: string;
+  relatedTickers: string[];
+  geminiWhy: string | null;
+  geminiForYou: string | null;
+  geminiDeepDive: string | null;
+  importance: "high" | "normal";
+  newsType: "macro" | "company";
+  impact?: "Positive" | "Negative" | "Neutral" | null;
+  jargon?: { term: string; definition: string }[] | null;
+  takeaway?: string | null;
+};
