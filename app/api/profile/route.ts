@@ -26,9 +26,15 @@ function getSupabase(accessToken: string) {
 // ─── GET /api/profile ────────────────────────────────────────────────────────
 // Returns the current user's profile, or 404 if none exists.
 
-export async function GET(req: Request) {
+function bearerToken(req: Request) {
   const authHeader = req.headers.get("authorization");
-  const token = authHeader?.replace("Bearer ", "");
+  const raw = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
+  if (!raw || raw === "undefined") return null;
+  return raw;
+}
+
+export async function GET(req: Request) {
+  const token = bearerToken(req);
   if (!token) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -64,8 +70,7 @@ export async function GET(req: Request) {
 // Body: { answers: QuizAnswers, primary_goal_kind: GoalKind }
 
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  const token = authHeader?.replace("Bearer ", "");
+  const token = bearerToken(req);
   if (!token) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -143,12 +148,16 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("[/api/profile POST] Supabase upsert error:", error);
+    const message =
+      typeof error.message === "string" && error.message.length > 0
+        ? error.message
+        : "Database error while saving profile (check user_profiles table and RLS).";
     return NextResponse.json(
       {
-        error: error.message || "Supabase error (no message)",
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
+        error: message,
+        code: error.code ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
       },
       { status: 500 },
     );

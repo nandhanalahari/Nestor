@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
 import { RiskMeter } from "@/components/RiskMeter";
-import { supabase } from "@/lib/supabase/client";
+import { authFetch } from "@/lib/api";
 import {
   QUIZ_QUESTIONS,
   PROFILE_DESCRIPTIONS,
@@ -175,22 +175,22 @@ export default function OnboardingPage() {
 
     // Also attempt to persist to Supabase (may fail if migration hasn't been run)
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const res = await fetch("/api/profile", {
+      const res = await authFetch("/api/profile", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
         body: JSON.stringify({ answers, primary_goal_kind }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        console.error("Profile save to DB failed (localStorage backup used):", err);
+        const text = await res.text();
+        let details: Record<string, unknown> = { status: res.status };
+        if (text) {
+          try {
+            details = { ...details, ...JSON.parse(text) };
+          } catch {
+            details.body = text;
+          }
+        }
+        console.error("Profile save to DB failed (localStorage backup used):", details);
       }
     } catch (e) {
       console.error("Profile API error (localStorage backup used):", e);

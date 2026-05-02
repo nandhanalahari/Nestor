@@ -17,9 +17,14 @@ export async function authFetch(url: string, init?: RequestInit) {
     return fetch(url, { ...init, headers });
   }
 
-  const {
+  let {
     data: { session },
   } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    session = refreshed.session;
+  }
 
   const headers: Record<string, string> = {
     ...(init?.headers as Record<string, string>),
