@@ -23,6 +23,7 @@ import {
 import { usd } from "@/lib/format"
 import { useAuth } from "@/components/auth-provider"
 import { authFetch } from "@/lib/api"
+import { SNAPSHOT_ONCE_PER_WEEK_MESSAGE } from "@/lib/snapshot"
 
 type Snapshot = {
   id: string
@@ -60,6 +61,8 @@ export default function HistoryPage() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [snapshotError, setSnapshotError] = useState<string | null>(null)
+  const [snapshotWeekLocked, setSnapshotWeekLocked] = useState(false)
   const [expandedStocks, setExpandedStocks] = useState<Set<string>>(new Set())
   const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set())
 
@@ -67,8 +70,15 @@ export default function HistoryPage() {
     setLoading(true)
     try {
       const res = await authFetch("/api/history")
-      const data = await res.json()
-      if (res.ok) setSnapshots(data.snapshots ?? [])
+      const data = (await res.json()) as {
+        snapshots?: Snapshot[]
+        hasSnapshotForCurrentWeek?: boolean
+      }
+      if (res.ok) {
+        setSnapshots(data.snapshots ?? [])
+        setSnapshotWeekLocked(Boolean(data.hasSnapshotForCurrentWeek))
+        setSnapshotError(null)
+      }
     } catch {
       // ignore
     } finally {
@@ -84,11 +94,25 @@ export default function HistoryPage() {
 
   const handleSnapshot = async () => {
     setSaving(true)
+    setSnapshotError(null)
     try {
       const res = await authFetch("/api/history", { method: "POST" })
-      if (res.ok) await loadHistory()
+      let data: { error?: string } = {}
+      try {
+        data = (await res.json()) as { error?: string }
+      } catch {
+        /* ignore */
+      }
+      if (!res.ok) {
+        setSnapshotError(
+          data.error ?? `Could not save snapshot (HTTP ${res.status}).`,
+        )
+        return
+      }
+      setSnapshotWeekLocked(true)
+      await loadHistory()
     } catch {
-      // ignore
+      setSnapshotError("Network error — try again.")
     } finally {
       setSaving(false)
     }
@@ -155,7 +179,7 @@ export default function HistoryPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-start justify-between"
+        className="flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start"
       >
         <div>
           <h1 className={`${headingClass} flex items-center gap-3`}>
@@ -166,10 +190,26 @@ export default function HistoryPage() {
             Track your weekly profits, portfolio contributions, and stock performance over time.
           </p>
         </div>
-        <Button onClick={handleSnapshot} disabled={saving} className="gap-2 bg-[#002141] hover:bg-[#003666]">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {saving ? "Saving..." : "Take Snapshot"}
-        </Button>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+          {snapshotError ? (
+            <p className="max-w-md rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 sm:text-right">
+              {snapshotError}
+            </p>
+          ) : null}
+          {snapshotWeekLocked ? (
+            <p className="max-w-md text-sm text-[#43474f] sm:text-right">
+              {SNAPSHOT_ONCE_PER_WEEK_MESSAGE}
+            </p>
+          ) : null}
+          <Button
+            onClick={handleSnapshot}
+            disabled={saving || snapshotWeekLocked || loading}
+            className="w-full gap-2 bg-[#002141] hover:bg-[#003666] sm:w-auto"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {saving ? "Saving..." : "Take Snapshot"}
+          </Button>
+        </div>
       </motion.div>
 
       {/* Summary Cards */}

@@ -33,7 +33,13 @@ const navItems = [
   { href: "/goals", label: "My Goals", icon: Target },
 ]
 
-export function Sidebar() {
+type SidebarProps = {
+  /** When true, drawer is visible on viewports below `lg`. */
+  mobileOpen?: boolean
+  onNavigate?: () => void
+}
+
+export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useAuth()
@@ -50,13 +56,17 @@ export function Sidebar() {
     "Investor"
 
   return (
-    <motion.aside
-      initial={{ x: -20, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className="sidebar-shadow fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-200 bg-white py-6 font-display transition-colors duration-300"
+    <aside
+      className={cn(
+        "sidebar-shadow fixed left-0 top-0 z-50 flex h-screen w-[min(18rem,85vw)] flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 font-display transition-transform duration-200 ease-out will-change-transform lg:z-40 lg:w-64 lg:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+      )}
     >
-      <Link href="/" className="group mb-10 px-6">
+      <Link
+        href="/"
+        onClick={() => onNavigate?.()}
+        className="group mb-10 px-6"
+      >
         <span className="block text-xl font-bold tracking-tight text-[#003666] transition-opacity group-hover:opacity-80">
           Nestor
         </span>
@@ -74,6 +84,7 @@ export function Sidebar() {
             >
               <Link
                 href={item.href}
+                onClick={() => onNavigate?.()}
                 className={cn(
                   "relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm transition-all duration-200 active:scale-[0.98]",
                   isActive
@@ -141,7 +152,10 @@ export function Sidebar() {
                   <div className="px-3 pb-3 space-y-1">
                     <Link
                       href="/profile"
-                      onClick={() => setUserMenuOpen(false)}
+                      onClick={() => {
+                        setUserMenuOpen(false)
+                        onNavigate?.()
+                      }}
                       className={cn(
                         "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors w-full",
                         pathname === "/profile"
@@ -165,7 +179,7 @@ export function Sidebar() {
             </AnimatePresence>
           </div>
         ) : (
-          <Link href="/auth">
+          <Link href="/auth" onClick={() => onNavigate?.()}>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <p className="text-sm font-medium text-primary">Sign in</p>
               <p className="text-xs text-muted-foreground">to save your data</p>
@@ -173,6 +187,6 @@ export function Sidebar() {
           </Link>
         )}
       </motion.div>
-    </motion.aside>
+    </aside>
   )
 }

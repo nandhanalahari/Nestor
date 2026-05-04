@@ -5,6 +5,12 @@ export function isMockDataEnabled() {
   return process.env.NEXT_PUBLIC_NESTOR_MOCK_DATA === "true";
 }
 
+/** Server routes: true when mock mode is on and the client sent the mock header (see authFetch). */
+export function isMockApiRequest(req: Request) {
+  if (process.env.NEXT_PUBLIC_NESTOR_MOCK_DATA !== "true") return false;
+  return req.headers.get("x-nestor-mock-data")?.toLowerCase() === "true";
+}
+
 export const MOCK_USER_ID = "00000000-0000-4000-8000-000000000001";
 
 export const mockProfile = {

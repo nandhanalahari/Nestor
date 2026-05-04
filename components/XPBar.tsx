@@ -42,12 +42,12 @@ export function XPBar({
   return (
     <div
       className={cn(
-        "relative flex min-w-[9.5rem] max-w-[11rem] flex-col gap-1 font-[Inter]",
+        "relative flex min-w-[5.75rem] max-w-[8rem] flex-col gap-0.5 font-[Inter] sm:min-w-[9.5rem] sm:max-w-[11rem] sm:gap-1",
         className,
       )}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <p className="truncate text-[11px] font-semibold leading-none text-[#002141]">
+        <p className="truncate text-[10px] font-semibold leading-none text-[#002141] sm:text-[11px]">
           <span className="text-[#003666]">{levelLabel}</span>
           <span className="font-normal text-[#3f5165]">
             {" "}
@@ -80,7 +80,7 @@ export function XPBar({
         </AnimatePresence>
       </div>
 
-      <p className="text-[10px] leading-none tabular-nums text-[#3f5165]">
+      <p className="text-[9px] leading-none tabular-nums text-[#3f5165] sm:text-[10px]">
         {level >= 7
           ? "Max level"
           : isLoading

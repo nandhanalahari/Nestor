@@ -112,7 +112,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="-mx-8 -mb-12 -mt-8 min-h-[calc(100vh-4rem)] bg-[#f9f9fe] px-8 py-12 text-[#002141]">
+    <div className="-mx-4 -mb-10 -mt-4 min-h-[calc(100vh-5rem)] bg-[#f9f9fe] px-4 py-8 text-[#002141] sm:-mx-6 sm:px-6 md:-mx-8 md:-mb-12 md:-mt-8 md:min-h-[calc(100vh-4rem)] md:px-8 md:py-12">
       <div className="mx-auto max-w-[820px]">
         <motion.section
           initial={{ opacity: 0, y: 16 }}
@@ -123,7 +123,7 @@ export default function HomePage() {
           <p className="text-sm font-bold uppercase tracking-[0.22em] text-[#7aa0d6]">
             Good morning
           </p>
-          <h1 className="mt-3 font-display text-4xl font-extrabold tracking-normal text-[#002141] md:text-5xl">
+          <h1 className="mt-3 font-display text-3xl font-extrabold tracking-normal text-[#002141] sm:text-4xl md:text-5xl">
             Welcome back, {firstName}.
           </h1>
         </motion.section>
@@ -138,7 +138,7 @@ export default function HomePage() {
             Your portfolio
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-5">
-            <p className="font-display text-6xl font-extrabold leading-none tracking-tight text-[#002141]">
+            <p className="font-display text-4xl font-extrabold leading-none tracking-tight text-[#002141] sm:text-5xl md:text-6xl">
               {usd.format(Math.round(totalValue))}
             </p>
             <div
