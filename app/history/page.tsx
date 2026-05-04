@@ -7,10 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import {
   GitBranch,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  PieChart,
   Loader2,
   ChevronDown,
   ChevronRight,
@@ -20,7 +16,7 @@ import {
   Percent,
   BarChart3,
 } from "lucide-react"
-import { usd } from "@/lib/format"
+import { usd, usdDetail } from "@/lib/format"
 import { useAuth } from "@/components/auth-provider"
 import { authFetch } from "@/lib/api"
 import { SNAPSHOT_ONCE_PER_WEEK_MESSAGE } from "@/lib/snapshot"
@@ -43,7 +39,8 @@ type Snapshot = {
 type StockNode = {
   ticker: string
   name: string
-  totalProfit: number
+  /** Sum of `profit` from every weekly snapshot row for this ticker. */
+  summedPnl: number
   avgWeight: number
   weeks: Snapshot[]
 }
@@ -53,6 +50,11 @@ const panelClass =
 const headingClass = "font-display text-3xl font-semibold text-[#002141]"
 const subcopyClass = "mt-2 max-w-3xl text-sm leading-6 text-[#43474f]"
 const metricLabelClass = "text-xs font-medium uppercase text-[#43474f]"
+
+function formatPnl(n: number) {
+  if (n > 0) return `+${usdDetail.format(n)}`
+  return usdDetail.format(n)
+}
 
 export default function HistoryPage() {
   const { user, loading: authLoading } = useAuth()
@@ -136,20 +138,11 @@ export default function HistoryPage() {
     })
   }
 
-  const latestWeekStart =
-    snapshots.length === 0
-      ? null
-      : snapshots.reduce(
-          (max, s) => (s.week_start > max ? s.week_start : max),
-          snapshots[0]!.week_start,
-        )
-
-  const latestSnapshotProfitTotal =
-    latestWeekStart == null
-      ? 0
-      : snapshots
-          .filter((s) => s.week_start === latestWeekStart)
-          .reduce((sum, s) => sum + Number(s.profit), 0)
+  /** Sum of every row’s `profit` (matches the sum of each stock’s combined snapshot P&L). */
+  const portfolioSummedPnl = snapshots.reduce(
+    (sum, s) => sum + Number(s.profit),
+    0,
+  )
 
   // Build the tree structure: group snapshots by ticker
   const stockTree: StockNode[] = (() => {
@@ -159,7 +152,7 @@ export default function HistoryPage() {
         map.set(snap.ticker, {
           ticker: snap.ticker,
           name: snap.name || snap.ticker,
-          totalProfit: 0,
+          summedPnl: 0,
           avgWeight: 0,
           weeks: [],
         })
@@ -174,16 +167,12 @@ export default function HistoryPage() {
           node.weeks.reduce((s, w) => s + w.portfolio_weight, 0) /
           node.weeks.length
       }
-      const matchLatest =
-        latestWeekStart != null
-          ? node.weeks.find((w) => w.week_start === latestWeekStart)
-          : null
-      node.totalProfit =
-        matchLatest != null ? Number(matchLatest.profit) : 0
+      node.summedPnl = node.weeks.reduce(
+        (s, w) => s + Number(w.profit),
+        0,
+      )
     }
-    return Array.from(map.values()).sort(
-      (a, b) => b.totalProfit - a.totalProfit,
-    )
+    return Array.from(map.values()).sort((a, b) => b.summedPnl - a.summedPnl)
   })()
 
   if (authLoading) {
@@ -241,15 +230,12 @@ export default function HistoryPage() {
       >
         <Card className={panelClass}>
           <CardContent className="p-4 text-center">
-            <p className={metricLabelClass}>Latest snapshot profit</p>
-            <p className={`text-2xl font-semibold ${latestSnapshotProfitTotal >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
-              {latestSnapshotProfitTotal >= 0 ? "+" : ""}{usd.format(Math.round(latestSnapshotProfitTotal))}
+            <p className={metricLabelClass}>Portfolio P&amp;L</p>
+            <p
+              className={`text-2xl font-semibold tabular-nums ${portfolioSummedPnl >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}
+            >
+              {formatPnl(portfolioSummedPnl)}
             </p>
-            {latestWeekStart ? (
-              <p className="mt-1 text-xs text-[#6b7280]">
-                Sum of P&amp;L in your most recent week ({latestWeekStart})
-              </p>
-            ) : null}
           </CardContent>
         </Card>
         <Card className={panelClass}>
@@ -292,7 +278,6 @@ export default function HistoryPage() {
         >
           {stockTree.map((stock, idx) => {
             const isExpanded = expandedStocks.has(stock.ticker)
-            const profitsKey = `${stock.ticker}:profits`
             const weightKey = `${stock.ticker}:weight`
             const contribKey = `${stock.ticker}:contrib`
 
@@ -315,14 +300,17 @@ export default function HistoryPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-display font-semibold text-[#002141]">{stock.name}</p>
                       <p className="text-xs text-[#43474f]">
-                        {stock.weeks.length} snapshot{stock.weeks.length !== 1 ? "s" : ""} · avg weight {stock.avgWeight.toFixed(1)}%
+                        {stock.weeks.length} snapshot{stock.weeks.length !== 1 ? "s" : ""} · avg weight{" "}
+                        {stock.avgWeight.toFixed(1)}%
+                        <span className="text-[#6b7280]"> · Combined P&amp;L (all weeks)</span>
                       </p>
                     </div>
-                    <div className="text-right mr-2">
-                      {latestWeekStart != null &&
-                      stock.weeks.some((w) => w.week_start === latestWeekStart) ? (
-                        <p className={`font-semibold ${stock.totalProfit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
-                          {stock.totalProfit >= 0 ? "+" : ""}{usd.format(Math.round(stock.totalProfit))}
+                    <div className="mr-2 text-right">
+                      {stock.weeks.length > 0 ? (
+                        <p
+                          className={`text-sm font-semibold tabular-nums sm:text-base ${stock.summedPnl > 0 ? "text-green-600" : stock.summedPnl < 0 ? "text-[#8a1f1f]" : "text-[#002141]"}`}
+                        >
+                          {formatPnl(stock.summedPnl)}
                         </p>
                       ) : (
                         <p className="text-sm font-medium text-[#9aa7b8]">—</p>
@@ -344,49 +332,57 @@ export default function HistoryPage() {
                         transition={{ duration: 0.2 }}
                         className="border-t border-[#e0e0e0]"
                       >
-                        <div className="pl-8 pr-4 py-2 space-y-1">
-                          {/* Branch 1: Profit History */}
-                          <button
-                            onClick={() => toggleBranch(profitsKey)}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#f9f9fe]"
-                          >
-                            <div className="h-8 w-1 rounded-full bg-[#f7e382]" />
-                            <DollarSign className="h-4 w-4 text-[#8a5d00]" />
-                            <span className="text-sm font-medium text-[#002141]">Profit History</span>
-                            <span className="ml-auto mr-2 text-xs text-[#43474f]">
-                              {stock.weeks.length} weeks
-                            </span>
-                            {expandedBranches.has(profitsKey) ? (
-                              <ChevronDown className="h-4 w-4 text-[#7aa0d6]" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-[#7aa0d6]" />
-                            )}
-                          </button>
-                          <AnimatePresence>
-                            {expandedBranches.has(profitsKey) && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="pl-10 space-y-1"
-                              >
-                                {stock.weeks.map((w) => (
-                                  <div key={w.id} className="flex items-center gap-3 py-1.5 text-sm">
-                                    <Calendar className="h-3 w-3 text-[#7aa0d6]" />
-                                    <span className="w-24 text-[#43474f]">{w.week_start}</span>
-                                    <span className={`font-mono ${w.profit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
-                                      {w.profit >= 0 ? "+" : ""}{usd.format(Math.round(w.profit))}
+                        <div className="space-y-3 px-4 py-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-[#7aa0d6]">
+                              Snapshot history
+                            </p>
+                            <p className="mt-1 text-xs text-[#43474f]">
+                              Each row is one weekly capture. The amounts above sum to{" "}
+                              <span className="font-medium text-[#002141]">
+                                {formatPnl(stock.summedPnl)}
+                              </span>{" "}
+                              for this stock.
+                            </p>
+                            <ul className="mt-3 space-y-2">
+                              {stock.weeks.map((w) => (
+                                <li
+                                  key={w.id}
+                                  className="rounded-lg border border-[#eef0f4] bg-[#fafbff] px-3 py-2.5 text-sm"
+                                >
+                                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <span className="font-medium text-[#002141]">
+                                      Week of {w.week_start}
+                                      <span className="font-normal text-[#6b7280]">
+                                        {" "}
+                                        – {w.week_end}
+                                      </span>
                                     </span>
-                                    <span className="text-xs text-[#43474f]">
-                                      ({w.profit_pct >= 0 ? "+" : ""}{w.profit_pct.toFixed(1)}%)
+                                    <span
+                                      className={`font-semibold tabular-nums ${w.profit > 0 ? "text-green-600" : w.profit < 0 ? "text-[#8a1f1f]" : "text-[#002141]"}`}
+                                    >
+                                      {formatPnl(Number(w.profit))}
+                                      <span className="ml-1.5 text-xs font-normal text-[#43474f]">
+                                        ({w.profit_pct >= 0 ? "+" : ""}
+                                        {Number(w.profit_pct).toFixed(2)}%)
+                                      </span>
                                     </span>
                                   </div>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#43474f]">
+                                    <span>
+                                      Cost {usdDetail.format(Number(w.cost_basis))}
+                                    </span>
+                                    <span>
+                                      Value {usdDetail.format(Number(w.market_value))}
+                                    </span>
+                                    <span>{Number(w.shares)} shares</span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
 
-                          {/* Branch 2: Portfolio Contribution */}
+                          <div className="border-t border-[#e0e0e0] pt-3">
                           <button
                             onClick={() => toggleBranch(contribKey)}
                             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#f9f9fe]"
@@ -475,6 +471,7 @@ export default function HistoryPage() {
                               </motion.div>
                             )}
                           </AnimatePresence>
+                          </div>
                         </div>
                       </motion.div>
                     )}

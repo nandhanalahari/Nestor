@@ -10,6 +10,10 @@ export type Holding = {
   shares?: number;
   costBasis?: number;
   costBasisDate?: string;
+  /** Mark-to-market value (live quote × shares, or amount when no quote). */
+  marketValue?: number;
+  /** marketValue − cost basis (unrealized). */
+  unrealizedPnl?: number;
 };
 
 export type Quote = {

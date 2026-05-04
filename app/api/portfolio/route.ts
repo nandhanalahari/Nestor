@@ -25,14 +25,31 @@ export async function GET(req: Request) {
       ...holding,
       costBasis: holding.costBasis ?? holding.amount,
     }));
-    const totalValue = holdings.reduce((sum, holding) => {
+    const totalCostBasis = holdings.reduce(
+      (s, h) => s + (h.costBasis ?? h.amount),
+      0,
+    );
+    const holdingsWithPnl: Holding[] = holdings.map((holding) => {
       const quote = mockQuotes.find((q) => q.ticker === holding.ticker);
-      return sum + (quote && holding.shares ? quote.price * holding.shares : holding.amount);
-    }, 0);
-    const marketValueWeights = holdings.map((holding) => {
-      const quote = mockQuotes.find((q) => q.ticker === holding.ticker);
-      const value = quote && holding.shares ? quote.price * holding.shares : holding.amount;
-      return totalValue > 0 ? value / totalValue : 0;
+      const mv =
+        quote && holding.shares
+          ? quote.price * holding.shares
+          : holding.amount;
+      const cost = holding.costBasis ?? holding.amount;
+      return {
+        ...holding,
+        marketValue: Math.round(mv * 100) / 100,
+        unrealizedPnl: Math.round((mv - cost) * 100) / 100,
+      };
+    });
+    const totalValue = holdingsWithPnl.reduce(
+      (sum, holding) => sum + (holding.marketValue ?? holding.amount),
+      0,
+    );
+    const totalPnl = Math.round((totalValue - totalCostBasis) * 100) / 100;
+    const marketValueWeights = holdingsWithPnl.map((holding) => {
+      const v = holding.marketValue ?? holding.amount;
+      return totalValue > 0 ? v / totalValue : 0;
     });
     const dailyChangePct = mockQuotes.reduce((acc, quote) => {
       const holding = holdings.find((h) => h.ticker === quote.ticker);
@@ -48,9 +65,11 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({
-      holdings,
+      holdings: holdingsWithPnl,
       quotes: mockQuotes,
       totalValue,
+      totalCostBasis,
+      totalPnl,
       dailyChangePct: Math.round(dailyChangePct * 100) / 100,
       asOf: "2026-05-02",
       warnings: ["Mock data mode is enabled. Values are local test data."],
@@ -91,6 +110,8 @@ export async function GET(req: Request) {
       holdings: [],
       quotes: [],
       totalValue: 0,
+      totalCostBasis: 0,
+      totalPnl: 0,
       dailyChangePct: 0,
       asOf: new Date().toISOString().slice(0, 10),
       warnings: [],
@@ -154,6 +175,18 @@ export async function GET(req: Request) {
     marketValues.push(mv);
     totalValue += mv;
   }
+
+  const holdingsWithPnl: Holding[] = holdings.map((h, i) => {
+    const mv = marketValues[i] ?? h.amount;
+    const cost = h.costBasis ?? h.amount;
+    return {
+      ...h,
+      marketValue: Math.round(mv * 100) / 100,
+      unrealizedPnl: Math.round((mv - cost) * 100) / 100,
+    };
+  });
+
+  const totalPnl = Math.round((totalValue - totalCost) * 100) / 100;
 
   const marketValueWeights =
     totalValue > 0 ? marketValues.map((mv) => mv / totalValue) : [];
@@ -254,9 +287,11 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({
-    holdings,
+    holdings: holdingsWithPnl,
     quotes,
     totalValue,
+    totalCostBasis: totalCost,
+    totalPnl,
     dailyChangePct,
     asOf: quotes[0]?.asOf ?? new Date().toISOString().slice(0, 10),
     warnings,
