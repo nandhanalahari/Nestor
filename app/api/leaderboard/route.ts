@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import type { LeaderboardRowJson } from "@/lib/leaderboardTypes";
-import {
-  getDemoLeaderboardRows,
-  mergeWithDemoLeaderboard,
-} from "@/lib/mockLeaderboard";
 
 export type { LeaderboardRowJson } from "@/lib/leaderboardTypes";
 
@@ -99,9 +95,14 @@ export async function GET(req: Request) {
 
   const end = offset + limit - 1;
 
-  const [selfRes, countRes] = await Promise.all([
+  const [selfRes, countRes, pageRes] = await Promise.all([
     supabase.from(viewName).select("*").eq("user_id", user.id).maybeSingle(),
     supabase.from("user_xp").select("*", { count: "exact", head: true }),
+    supabase
+      .from(viewName)
+      .select("*")
+      .order("rank", { ascending: true })
+      .range(offset, end),
   ]);
 
   if (selfRes.error) {
@@ -112,47 +113,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: countRes.error.message }, { status: 500 });
   }
 
-  const totalReal = countRes.count ?? 0;
-  const sparseDemo = totalReal < 3;
-
-  let rows: LeaderboardRowJson[];
-  let mergedFull: LeaderboardRowJson[];
-
-  if (sparseDemo) {
-    const { data: allReal, error: allErr } = await supabase
-      .from(viewName)
-      .select("*")
-      .order("rank", { ascending: true });
-    if (allErr) {
-      return NextResponse.json({ error: allErr.message }, { status: 500 });
-    }
-    const allRealMapped = (allReal ?? []).map((r) =>
-      mapRow(r as unknown as LeaderboardRowDb),
-    );
-    mergedFull = mergeWithDemoLeaderboard(
-      modeParam,
-      getDemoLeaderboardRows(),
-      allRealMapped,
-    );
-    rows = mergedFull.slice(offset, offset + limit);
-  } else {
-    const pageRes = await supabase
-      .from(viewName)
-      .select("*")
-      .order("rank", { ascending: true })
-      .range(offset, end);
-    if (pageRes.error) {
-      return NextResponse.json({ error: pageRes.error.message }, { status: 500 });
-    }
-    mergedFull = (pageRes.data ?? []).map((r) =>
-      mapRow(r as unknown as LeaderboardRowDb),
-    );
-    rows = mergedFull;
+  if (pageRes.error) {
+    return NextResponse.json({ error: pageRes.error.message }, { status: 500 });
   }
 
-  const currentUserRank: LeaderboardRowJson | null = sparseDemo
-    ? mergedFull.find((r) => r.userId === user.id) ?? null
-    : selfRes.data == null
+  const totalReal = countRes.count ?? 0;
+  const rows = (pageRes.data ?? []).map((r) =>
+    mapRow(r as unknown as LeaderboardRowDb),
+  );
+
+  const currentUserRank: LeaderboardRowJson | null =
+    selfRes.data == null
       ? null
       : mapRow(selfRes.data as unknown as LeaderboardRowDb);
 
@@ -160,9 +131,8 @@ export async function GET(req: Request) {
     mode: modeParam,
     limit,
     offset,
-    totalPlayers: sparseDemo ? mergedFull.length : totalReal,
+    totalPlayers: totalReal,
     rows,
     currentUserRank,
-    leaderboardDemoFill: sparseDemo,
   });
 }

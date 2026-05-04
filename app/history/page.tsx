@@ -136,6 +136,21 @@ export default function HistoryPage() {
     })
   }
 
+  const latestWeekStart =
+    snapshots.length === 0
+      ? null
+      : snapshots.reduce(
+          (max, s) => (s.week_start > max ? s.week_start : max),
+          snapshots[0]!.week_start,
+        )
+
+  const latestSnapshotProfitTotal =
+    latestWeekStart == null
+      ? 0
+      : snapshots
+          .filter((s) => s.week_start === latestWeekStart)
+          .reduce((sum, s) => sum + Number(s.profit), 0)
+
   // Build the tree structure: group snapshots by ticker
   const stockTree: StockNode[] = (() => {
     const map = new Map<string, StockNode>()
@@ -151,20 +166,25 @@ export default function HistoryPage() {
       }
       const node = map.get(snap.ticker)!
       node.weeks.push(snap)
-      node.totalProfit += snap.profit
     }
-    // Sort weeks by date descending within each stock
     for (const node of map.values()) {
       node.weeks.sort((a, b) => b.week_start.localeCompare(a.week_start))
       if (node.weeks.length > 0) {
         node.avgWeight =
-          node.weeks.reduce((s, w) => s + w.portfolio_weight, 0) / node.weeks.length
+          node.weeks.reduce((s, w) => s + w.portfolio_weight, 0) /
+          node.weeks.length
       }
+      const matchLatest =
+        latestWeekStart != null
+          ? node.weeks.find((w) => w.week_start === latestWeekStart)
+          : null
+      node.totalProfit =
+        matchLatest != null ? Number(matchLatest.profit) : 0
     }
-    return Array.from(map.values()).sort((a, b) => b.totalProfit - a.totalProfit)
+    return Array.from(map.values()).sort(
+      (a, b) => b.totalProfit - a.totalProfit,
+    )
   })()
-
-  const totalProfit = stockTree.reduce((s, n) => s + n.totalProfit, 0)
 
   if (authLoading) {
     return (
@@ -221,10 +241,15 @@ export default function HistoryPage() {
       >
         <Card className={panelClass}>
           <CardContent className="p-4 text-center">
-            <p className={metricLabelClass}>Total Tracked Profit</p>
-            <p className={`text-2xl font-semibold ${totalProfit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
-              {totalProfit >= 0 ? "+" : ""}{usd.format(Math.round(totalProfit))}
+            <p className={metricLabelClass}>Latest snapshot profit</p>
+            <p className={`text-2xl font-semibold ${latestSnapshotProfitTotal >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
+              {latestSnapshotProfitTotal >= 0 ? "+" : ""}{usd.format(Math.round(latestSnapshotProfitTotal))}
             </p>
+            {latestWeekStart ? (
+              <p className="mt-1 text-xs text-[#6b7280]">
+                Sum of P&amp;L in your most recent week ({latestWeekStart})
+              </p>
+            ) : null}
           </CardContent>
         </Card>
         <Card className={panelClass}>
@@ -294,9 +319,14 @@ export default function HistoryPage() {
                       </p>
                     </div>
                     <div className="text-right mr-2">
-                      <p className={`font-semibold ${stock.totalProfit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
-                        {stock.totalProfit >= 0 ? "+" : ""}{usd.format(Math.round(stock.totalProfit))}
-                      </p>
+                      {latestWeekStart != null &&
+                      stock.weeks.some((w) => w.week_start === latestWeekStart) ? (
+                        <p className={`font-semibold ${stock.totalProfit >= 0 ? "text-green-600" : "text-[#8a1f1f]"}`}>
+                          {stock.totalProfit >= 0 ? "+" : ""}{usd.format(Math.round(stock.totalProfit))}
+                        </p>
+                      ) : (
+                        <p className="text-sm font-medium text-[#9aa7b8]">—</p>
+                      )}
                     </div>
                     {isExpanded ? (
                       <ChevronDown className="h-5 w-5 flex-shrink-0 text-[#7aa0d6]" />

@@ -46,7 +46,6 @@ type LeaderboardApiResponse = {
   totalPlayers: number;
   rows: LeaderboardRow[];
   currentUserRank: LeaderboardRow | null;
-  leaderboardDemoFill?: boolean;
 };
 
 /** Matches XP / DB level breakpoints */
@@ -275,7 +274,6 @@ export function LeaderboardTable({
   const totalPlayers = data?.totalPlayers ?? 0;
   const rows = data?.rows ?? [];
   const you = data?.currentUserRank ?? null;
-  const demoFill = Boolean(data?.leaderboardDemoFill);
 
   const q = searchQuery.trim().toLowerCase();
   const filteredRows = useMemo(() => {
@@ -283,18 +281,12 @@ export function LeaderboardTable({
     return rows.filter((r) => r.displayName.toLowerCase().includes(q));
   }, [rows, q]);
 
-  const showSparseEmpty =
-    !isLoading && !error && totalPlayers < 3;
+  const showEmptyLeaderboard =
+    !isLoading && !error && totalPlayers === 0;
 
   return (
     <div className="relative space-y-4 pb-28 font-[Inter] text-[#002141]">
-      {demoFill ? (
-        <p className="rounded-lg border border-dashed border-[#7aa0d6] bg-[#eef4fb] px-3 py-2 text-xs text-[#3f5165]">
-          Sample investors are shown until at least three real players have XP.
-          Rankings and streaks are illustrative.
-        </p>
-      ) : null}
-      {showSparseEmpty ? (
+      {showEmptyLeaderboard ? (
         <div className="rounded-lg border border-[#e0e0e0] bg-white px-6 py-12 text-center shadow-[0_20px_20px_rgba(0,0,0,0.04)]">
           <p className="mx-auto max-w-md text-sm leading-relaxed text-[#3f5165]">
             Be the first on the board — complete a Trading School lesson to earn

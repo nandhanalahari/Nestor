@@ -14,7 +14,9 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { authFetch } from "@/lib/api"
+import { HISTORICAL_LESSONS } from "@/lib/lessons"
 import { usd } from "@/lib/format"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { Holding } from "@/lib/types"
 
 type PortfolioPayload = {
@@ -22,28 +24,6 @@ type PortfolioPayload = {
   totalValue: number
   dailyChangePct: number
 }
-
-const jumpBackItems = [
-  {
-    href: "/dashboard",
-    title: "Go to Dashboard",
-    description: "Your full portfolio, charts and holdings",
-    icon: LayoutDashboard,
-    featured: true,
-  },
-  {
-    href: "/lessons",
-    title: "Today's lesson: The 2008 Crash",
-    description: "Trading School · +50 XP · ~3 min",
-    icon: BookOpen,
-  },
-  {
-    href: "/scenarios",
-    title: "Run a What-If Scenario",
-    description: "See how your portfolio handles a market shock",
-    icon: GitBranch,
-  },
-]
 
 function getFirstName(userName?: string | null, email?: string | null) {
   const source = userName || email?.split("@")[0] || "Investor"
@@ -53,17 +33,56 @@ function getFirstName(userName?: string | null, email?: string | null) {
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth()
   const [portfolio, setPortfolio] = useState<PortfolioPayload | null>(null)
-  const [loadingPortfolio, setLoadingPortfolio] = useState(false)
+  const [loadingPortfolio, setLoadingPortfolio] = useState(true)
+
+  const jumpBackItems = useMemo(() => {
+    const featuredHistorical =
+      HISTORICAL_LESSONS.find((l) => l.id === "gfc-2008") ??
+      HISTORICAL_LESSONS[0]
+    return [
+      {
+        href: "/dashboard",
+        title: "Go to Dashboard",
+        description: "Your full portfolio, charts and holdings",
+        icon: LayoutDashboard,
+        featured: true,
+      },
+      {
+        href: "/lessons",
+        title: featuredHistorical
+          ? `Lesson: ${featuredHistorical.title}`
+          : "Trading School",
+        description: featuredHistorical
+          ? `${featuredHistorical.era} · open Lessons to explore more`
+          : "Learn concepts and practice with historical scenarios",
+        icon: BookOpen,
+      },
+      {
+        href: "/scenarios",
+        title: "Run a What-If Scenario",
+        description: "See how your portfolio handles a market shock",
+        icon: GitBranch,
+      },
+    ]
+  }, [])
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setPortfolio(null)
+      setLoadingPortfolio(false)
+      return
+    }
 
     let cancelled = false
+    setLoadingPortfolio(true)
+
     async function loadPortfolio() {
-      setLoadingPortfolio(true)
       try {
         const res = await authFetch("/api/portfolio")
-        if (!res.ok) return
+        if (!res.ok) {
+          if (!cancelled) setPortfolio(null)
+          return
+        }
         const data = (await res.json()) as PortfolioPayload
         if (!cancelled) setPortfolio(data)
       } finally {
@@ -82,10 +101,11 @@ export default function HomePage() {
     user?.email,
   )
 
-  const totalValue = portfolio?.totalValue ?? 12480
-  const dailyChangePct = portfolio?.dailyChangePct ?? 1.34
-  const holdingsCount = portfolio?.holdings?.length ?? 5
-  const isPositive = dailyChangePct >= 0
+  const totalValue = portfolio?.totalValue
+  const dailyChangePct = portfolio?.dailyChangePct
+  const holdingsCount = portfolio?.holdings?.length
+  const isPositive = (dailyChangePct ?? 0) >= 0
+  const portfolioNumbersReady = Boolean(portfolio) && !loadingPortfolio
 
   const tip = useMemo(() => {
     const largestHolding = portfolio?.holdings?.[0]?.ticker
@@ -138,25 +158,42 @@ export default function HomePage() {
             Your portfolio
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-5">
-            <p className="font-display text-4xl font-extrabold leading-none tracking-tight text-[#002141] sm:text-5xl md:text-6xl">
-              {usd.format(Math.round(totalValue))}
-            </p>
-            <div
-              className={`rounded-full border px-4 py-2 text-lg font-bold ${
-                isPositive
-                  ? "border-[#a9dfc3] bg-[#e7f7ef] text-[#146c43]"
-                  : "border-[#f4b7b7] bg-[#fff1f1] text-[#9f1239]"
-              }`}
-            >
-              <span className="inline-flex items-center gap-1">
-                <TrendingUp className={`h-4 w-4 ${isPositive ? "" : "rotate-180"}`} />
-                {isPositive ? "+" : ""}
-                {dailyChangePct.toFixed(2)}% today
-              </span>
-            </div>
+            {loadingPortfolio ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton className="h-12 w-44 sm:h-14 sm:w-52" />
+                <Skeleton className="h-10 w-32 rounded-full" />
+              </div>
+            ) : portfolioNumbersReady && totalValue != null && dailyChangePct != null ? (
+              <>
+                <p className="font-display text-4xl font-extrabold leading-none tracking-tight text-[#002141] sm:text-5xl md:text-6xl">
+                  {usd.format(Math.round(totalValue))}
+                </p>
+                <div
+                  className={`rounded-full border px-4 py-2 text-lg font-bold ${
+                    isPositive
+                      ? "border-[#a9dfc3] bg-[#e7f7ef] text-[#146c43]"
+                      : "border-[#f4b7b7] bg-[#fff1f1] text-[#9f1239]"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <TrendingUp className={`h-4 w-4 ${isPositive ? "" : "rotate-180"}`} />
+                    {isPositive ? "+" : ""}
+                    {dailyChangePct.toFixed(2)}% today
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="font-display text-xl font-semibold text-[#9aa7b8]">
+                Portfolio unavailable
+              </p>
+            )}
           </div>
           <p className="mt-3 text-base font-medium text-[#9aa7b8]">
-            {loadingPortfolio ? "Loading holdings" : `${holdingsCount} holdings`}
+            {loadingPortfolio
+              ? "Loading holdings…"
+              : holdingsCount != null
+                ? `${holdingsCount} holding${holdingsCount === 1 ? "" : "s"}`
+                : "—"}
           </p>
         </motion.section>
 
@@ -172,7 +209,7 @@ export default function HomePage() {
             </div>
             <div>
               <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-[#524700]">
-                Today's tip
+                Today&apos;s tip
               </p>
               <p className="mt-3 max-w-2xl text-xl font-semibold leading-8 text-[#002141]">
                 {tip}
@@ -221,7 +258,7 @@ export default function HomePage() {
                   </p>
                 </div>
                 <ArrowRight
-                  className={`h-5 w-5 transition-transform group-hover:translate-x-1 ${
+                  className={`h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1 ${
                     item.featured ? "text-white/70" : "text-[#7aa0d6]"
                   }`}
                 />
