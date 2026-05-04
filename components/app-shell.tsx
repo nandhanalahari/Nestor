@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { Nav } from "@/components/nav";
 import { Sidebar } from "@/components/sidebar";
@@ -8,11 +9,27 @@ import { Loader2 } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { loading } = useAuth();
+  const router = useRouter();
+  const { user, loading } = useAuth();
 
   const isAuthPage = pathname === "/auth";
   const isOnboarding = pathname === "/onboarding";
   const isLanding = pathname === "/";
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (user) {
+      if (isAuthPage) {
+        router.replace("/");
+      }
+      return;
+    }
+
+    if (!isAuthPage) {
+      router.replace("/auth");
+    }
+  }, [loading, user, isAuthPage, router]);
 
   if (loading && !isLanding && !isAuthPage && !isOnboarding) {
     return (

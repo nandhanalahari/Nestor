@@ -231,7 +231,7 @@ export default function OnboardingPage() {
             <ResultScreen
               score={result.score}
               label={result.label}
-              onContinue={() => router.push("/dashboard")}
+              onContinue={() => router.push("/")}
             />
           )}
         </AnimatePresence>

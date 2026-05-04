@@ -103,6 +103,14 @@ export default function HomePage() {
     )
   }
 
+  if (!user) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#003666]" />
+      </div>
+    )
+  }
+
   return (
     <div className="-mx-8 -mb-12 -mt-8 min-h-[calc(100vh-4rem)] bg-[#f9f9fe] px-8 py-12 text-[#002141]">
       <div className="mx-auto max-w-[820px]">

@@ -63,9 +63,9 @@ export default function AuthPage() {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
       const hasLocalProfile = !!localStorage.getItem("nestor_user_profile");
-      router.push(res.ok || hasLocalProfile ? "/dashboard" : "/onboarding");
+      router.push(res.ok || hasLocalProfile ? "/" : "/onboarding");
     } catch {
-      router.push("/dashboard");
+      router.push("/");
     }
 
     setLoading(false);
